@@ -1,0 +1,23 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # Amplify's build image doesn't include pnpm — enable it via corepack
+        # (uses the version pinned in package.json's "packageManager" field)
+        - corepack enable
+        - corepack prepare --activate
+        - pnpm install --frozen-lockfile
+    build:
+      commands:
+        # Make env vars available to the Next.js build (Amplify SSR requirement)
+        - env | grep -e NEXT_PUBLIC_ >> .env.production || true
+        - pnpm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*

@@ -1,5 +1,5 @@
 import { createClient } from "./server"
-import { isSupabaseConfigured } from "./config"
+import { isNittEmail, isSupabaseConfigured } from "./config"
 import type { UserRole } from "@/lib/types"
 
 export interface SessionUser {
@@ -24,7 +24,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user?.email_confirmed_at || !isNittEmail(user.email ?? "")) return null
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -35,8 +35,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return {
     id: user.id,
     email: user.email ?? "",
-    name: profile?.full_name || (user.user_metadata?.full_name as string) || "NITT User",
-    role: (profile?.role as UserRole) ?? "student",
+    name: profile?.full_name || (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "") || "NITT User",
+    role: profile?.role === "admin" ? "admin" : "student",
     department: profile?.department ?? "",
   }
 }

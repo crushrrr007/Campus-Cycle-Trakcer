@@ -14,16 +14,17 @@ import { cn } from "@/lib/utils"
 
 interface AuthFormProps {
   mode: "sign-in" | "sign-up"
+  callbackFailed?: boolean
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, callbackFailed = false }: AuthFormProps) {
   const router = useRouter()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(callbackFailed ? "This email link is invalid or has expired. Sign in to request a fresh verification code." : null)
   const [verification, setVerification] = useState<{ email: string; codeSent: boolean } | null>(null)
 
   const isSignUp = mode === "sign-up"
@@ -203,6 +204,8 @@ export function AuthForm({ mode }: AuthFormProps) {
               id="email"
               type="email"
               autoComplete="email"
+              aria-invalid={!emailValid}
+              aria-describedby="email-help"
               required
               placeholder={isSignUp ? "rollno@nitt.edu" : "you@nitt.edu"}
               value={email}
@@ -214,9 +217,9 @@ export function AuthForm({ mode }: AuthFormProps) {
               disabled={loading}
             />
             {emailError ? (
-              <p className="text-xs text-destructive">{emailError}</p>
+              <p id="email-help" className="text-xs text-destructive">{emailError}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p id="email-help" className="text-xs text-muted-foreground">
                 Must end with <span className="font-medium text-foreground">{NITT_DOMAIN}</span>
               </p>
             )}
@@ -232,7 +235,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                 type={showPassword ? "text" : "password"}
                 autoComplete={isSignUp ? "new-password" : "current-password"}
                 required
-                minLength={8}
+                minLength={isSignUp ? 8 : undefined}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -243,7 +246,8 @@ export function AuthForm({ mode }: AuthFormProps) {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:text-foreground"
-                tabIndex={-1}
+                disabled={loading}
+                aria-pressed={showPassword}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

@@ -45,7 +45,8 @@ export function ScanView() {
           getBike={getBike}
           onReturn={async (dest) => {
             const res = await returnBike(myActiveRide.bikeId, dest)
-            res.ok ? toast.success(res.message) : toast.error(res.message)
+            if (res.ok) toast.success(res.message)
+            else toast.error(res.message)
           }}
         />
       ) : (
@@ -53,7 +54,8 @@ export function ScanView() {
           availableCodes={availableBikes.map((b) => b.id)}
           onBorrow={async (code) => {
             const res = await borrowBike(code)
-            res.ok ? toast.success(res.message) : toast.error(res.message)
+            if (res.ok) toast.success(res.message)
+            else toast.error(res.message)
           }}
         />
       )}

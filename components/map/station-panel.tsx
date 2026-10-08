@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Bike as BikeIcon, MapPin, Navigation, Save, Wrench, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,6 +34,7 @@ export function StationPanel({
   if (editing && role === "admin") {
     return (
       <StationEditForm
+        key={station.id}
         station={station}
         onClose={onClose}
         onSave={(id, data) => updateStation(id, data)}
@@ -139,25 +140,32 @@ function StationEditForm({
 }: {
   station: StationStats
   onClose: () => void
-  onSave: (id: string, data: Partial<StationStats>) => void
+  onSave: (id: string, data: Partial<StationStats>) => Promise<{ ok: boolean; message: string }>
 }) {
   const [name, setName] = useState(station.name)
   const [shortName, setShortName] = useState(station.shortName)
   const [zone, setZone] = useState(station.zone)
   const [capacity, setCapacity] = useState(String(station.capacity))
 
-  // Keep form in sync if a different station is selected while editing.
-  useEffect(() => {
-    setName(station.name)
-    setShortName(station.shortName)
-    setZone(station.zone)
-    setCapacity(String(station.capacity))
-  }, [station.id, station.name, station.shortName, station.zone, station.capacity])
+  const [saving, setSaving] = useState(false)
 
-  function handleSave() {
-    const cap = Math.max(0, Number.parseInt(capacity, 10) || 0)
-    onSave(station.id, { name: name.trim(), shortName: shortName.trim(), zone: zone.trim(), capacity: cap })
-    toast.success("Station updated", { description: `${shortName.trim()} details saved.` })
+  async function handleSave() {
+    const cap = Number(capacity)
+    if (!name.trim() || !shortName.trim() || !zone.trim() || !Number.isInteger(cap) || cap < station.occupied) {
+      toast.error("Enter valid station details and a capacity that fits its docked bicycles.")
+      return
+    }
+    if (saving) return
+    setSaving(true)
+    try {
+      const result = await onSave(station.id, { name: name.trim(), shortName: shortName.trim(), zone: zone.trim(), capacity: cap })
+      if (result.ok) toast.success(result.message)
+      else toast.error(result.message)
+    } catch {
+      toast.error("Unable to save the station. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -206,7 +214,7 @@ function StationEditForm({
 
       <Separator />
       <div className="flex items-center gap-2 p-4">
-        <Button className="flex-1" onClick={handleSave}>
+        <Button className="flex-1" disabled={saving} onClick={handleSave}>
           <Save data-icon="inline-start" />
           Save changes
         </Button>

@@ -4,8 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { LogOut, UserRound, Wrench } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
-import { clearDemoSessionCookie } from "@/lib/demo-auth"
+import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -29,14 +28,17 @@ export function Topbar() {
   const router = useRouter()
 
   async function handleSignOut() {
-    if (isSupabaseConfigured) {
-      const supabase = createClient()
-      await supabase.auth.signOut()
-    } else {
-      clearDemoSessionCookie()
+    try {
+      const { error } = await createClient().auth.signOut()
+      if (error) {
+        toast.error("Unable to sign out. Please try again.")
+        return
+      }
+      router.replace("/sign-in")
+      router.refresh()
+    } catch {
+      toast.error("Unable to sign out. Check your connection and try again.")
     }
-    router.push("/sign-in")
-    router.refresh()
   }
 
   const initials = currentUser.name

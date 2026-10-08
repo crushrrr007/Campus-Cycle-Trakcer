@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { MapPin, Move, Pencil } from "lucide-react"
+import { Move, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
 import { InteractiveMap } from "@/components/map/interactive-map"

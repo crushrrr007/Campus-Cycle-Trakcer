@@ -25,7 +25,6 @@ const LAST = [
   "Sharma", "Verma", "Iyer", "Nair", "Reddy", "Menon", "Patel", "Rao", "Krishnan", "Pillai",
   "Gupta", "Bose", "Das", "Joshi", "Kumar", "Subramanian", "Chandran", "Mehta", "Venkat", "Raman",
 ]
-const DEPTS = ["CSE", "ECE", "Mech", "Civil", "EEE", "Chemical", "Metallurgy", "Production", "ICE", "Architecture"]
 const MODELS = ["NITT Cruiser", "Campus Sprint", "EcoRide City", "TrailMate Lite", "UrbanGlide"]
 const SERVICE_TYPES = ["Brake adjustment", "Tyre replacement", "Chain lube", "Gear tuning", "Full inspection", "Seat repair"]
 
@@ -102,7 +101,7 @@ export function seedData(): SeedData {
     const borrowMsAgo = daysAgo * DAY - hour * 3600000 - minute * 60000 + 12 * 3600000
     if (borrowMsAgo < 0) continue
     const duration = randInt(r, 4, 55)
-    let src = pick(r, stationIds)
+    const src = pick(r, stationIds)
     let dest = pick(r, stationIds)
     if (dest === src) dest = stationIds[(stationIds.indexOf(src) + 1) % stationIds.length]
     const u = pick(r, rideNames)
@@ -127,7 +126,7 @@ export function seedData(): SeedData {
     const borrowMsAgo = daysAgo * DAY - hour * 3600000 - minute * 60000 + 12 * 3600000
     if (borrowMsAgo < 0) continue
     const duration = randInt(r, 6, 34)
-    let src = pick(r, stationIds)
+    const src = pick(r, stationIds)
     let dest = pick(r, stationIds)
     if (dest === src) dest = stationIds[(stationIds.indexOf(src) + 1) % stationIds.length]
     rides.push({

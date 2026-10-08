@@ -76,11 +76,38 @@ export function BikeDetailSheet({ bikeId, onClose, onEdit }: BikeDetailSheetProp
   const [serviceNotes, setServiceNotes] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  function handleLogService() {
-    if (!bike) return
-    logService(bike.id, serviceType, serviceNotes.trim() || "Routine service")
-    setServiceNotes("")
-    toast.success(`${serviceType} logged for ${bike.id}.`)
+  const [pending, setPending] = useState(false)
+
+  async function handleLogService() {
+    if (!bike || pending) return
+    setPending(true)
+    try {
+      const result = await logService(bike.id, serviceType, serviceNotes.trim() || "Routine service")
+      if (result.ok) {
+        setServiceNotes("")
+        toast.success(result.message)
+      } else {
+        toast.error(result.message)
+      }
+    } catch {
+      toast.error("Unable to log the service. Please try again.")
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function handleMaintenance() {
+    if (!bike || pending) return
+    setPending(true)
+    try {
+      const result = await toggleMaintenance(bike.id)
+      if (result.ok) toast.success(result.message)
+      else toast.error(result.message)
+    } catch {
+      toast.error("Unable to update maintenance. Please try again.")
+    } finally {
+      setPending(false)
+    }
   }
 
   async function handleDelete() {
@@ -154,15 +181,8 @@ export function BikeDetailSheet({ bikeId, onClose, onEdit }: BikeDetailSheetProp
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={bike.status === "in-use"}
-                    onClick={() => {
-                      toggleMaintenance(bike.id)
-                      toast.success(
-                        bike.status === "maintenance"
-                          ? `${bike.id} returned to service.`
-                          : `${bike.id} sent to maintenance.`,
-                      )
-                    }}
+                    disabled={pending || bike.status === "in-use"}
+                    onClick={handleMaintenance}
                   >
                     <Wrench className="size-3.5" />
                     {bike.status === "maintenance" ? "Return to service" : "Send to maintenance"}
@@ -197,8 +217,8 @@ export function BikeDetailSheet({ bikeId, onClose, onEdit }: BikeDetailSheetProp
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" className="h-9" onClick={handleLogService}>
-                      Log
+                    <Button size="sm" className="h-9" disabled={pending || bike.status === "in-use"} onClick={handleLogService}>
+                      {pending ? "Saving…" : "Log"}
                     </Button>
                   </div>
                   <Textarea

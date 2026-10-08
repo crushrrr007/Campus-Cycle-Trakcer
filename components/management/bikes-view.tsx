@@ -199,9 +199,14 @@ export function BikesView() {
                       onOpenDetail={() => setDetailBikeId(bike.id)}
                       onEdit={() => openEdit(bike)}
                       onDelete={() => setDeleteTarget(bike)}
-                      onToggleMaintenance={() => {
-                        toggleMaintenance(bike.id)
-                        toast.success(`${bike.id} maintenance status updated.`)
+                      onToggleMaintenance={async () => {
+                        try {
+                          const result = await toggleMaintenance(bike.id)
+                          if (result.ok) toast.success(result.message)
+                          else toast.error(result.message)
+                        } catch {
+                          toast.error("Unable to update maintenance. Please try again.")
+                        }
                       }}
                     />
                   ))}

@@ -89,6 +89,49 @@ test("reject cross-site requests and malformed actions without calling auth", as
   assert.equal(h.calls.length, 0)
 })
 
+test("same-origin browser requests survive preview proxy host rewriting", async () => {
+  const h = harness()
+  const response = await h.post({ ...resetRequest, email: "not-a-college-address" }, {
+    origin: "https://set-environment-variables.v0.build",
+    host: "localhost:3000",
+    "x-forwarded-host": "sb-preview.vercel.run",
+    "sec-fetch-site": "same-origin",
+  })
+  assert.equal(response.status, 400)
+  assert.match(response.data.error, /college email/)
+  assert.equal(h.calls.length, 0)
+})
+
+test("proxy compatibility never accepts cross-site, same-site mismatches or invalid origins", async () => {
+  for (const headers of [
+    { origin: "https://evil.test", "sec-fetch-site": "cross-site" },
+    { origin: "https://cycle.test", "sec-fetch-site": "cross-site" },
+    { origin: "https://evil.test", "sec-fetch-site": "same-site" },
+    { origin: "https://evil.test" },
+    { origin: "", "sec-fetch-site": "same-origin" },
+    { origin: "null", "sec-fetch-site": "same-origin" },
+    { origin: "not-a-url", "sec-fetch-site": "same-origin" },
+    { origin: "file:///tmp/page.html", "sec-fetch-site": "same-origin" },
+    { origin: "https://user:password@cycle.test", "sec-fetch-site": "same-origin" },
+    { origin: "https://cycle.test/unexpected-path", "sec-fetch-site": "same-origin" },
+  ]) {
+    const h = harness()
+    assert.equal((await h.post(resetRequest, headers)).status, 403, JSON.stringify(headers))
+    assert.equal(h.calls.length, 0)
+  }
+})
+
+test("forwarded host lists preserve the original host for browsers without Fetch Metadata", async () => {
+  const h = harness()
+  const response = await h.post({ ...resetRequest, email: "not-a-college-address" }, {
+    origin: "https://preview.cycle.test",
+    "x-forwarded-host": "preview.cycle.test, internal.proxy.test",
+  })
+  assert.equal(response.status, 400)
+  assert.match(response.data.error, /college email/)
+  assert.equal(h.calls.length, 0)
+})
+
 test("reject noncampus email, malformed OTP, short password and mismatched confirmation", async () => {
   for (const body of [
     { ...resetRequest, email: "student@example.com" },

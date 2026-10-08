@@ -37,10 +37,13 @@ function authFailure(error: AuthError, stage: "password" | "send" | "verify" | "
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin")
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host")
-  let originHost: string | null = null
-  try { originHost = origin ? new URL(origin).host : null } catch { /* Reject malformed origins below. */ }
-  if (!originHost || (originHost !== host && origin !== request.nextUrl.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+  const host = (request.headers.get("x-forwarded-host") ?? request.headers.get("host"))?.split(",")[0].trim()
+  const fetchSite = request.headers.get("sec-fetch-site")
+  let originUrl: URL | null = null
+  try { originUrl = origin ? new URL(origin) : null } catch { /* Reject malformed origins below. */ }
+  // Browser Fetch Metadata retains the public request context when preview proxies rewrite server hosts.
+  const sameOrigin = fetchSite === "same-origin" || originUrl?.host === host || origin === request.nextUrl.origin
+  if (!originUrl || !["http:", "https:"].includes(originUrl.protocol) || originUrl.origin !== origin || !sameOrigin || fetchSite === "cross-site") {
     return reply({ error: "This request is not allowed." }, 403)
   }
   if (!request.headers.get("content-type")?.startsWith("application/json")) {

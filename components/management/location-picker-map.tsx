@@ -68,12 +68,11 @@ export default function LocationPickerMap({ lat, lng, onChange }: LocationPicker
       style={{ height: "100%", width: "100%", background: "#e8e6df" }}
     >
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-        attribution="&copy; OpenStreetMap contributors &copy; CARTO"
-        subdomains="abcd"
-        maxZoom={20}
-        updateWhenIdle={false}
-        keepBuffer={4}
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
+        maxZoom={19}
+        updateWhenIdle
+        keepBuffer={2}
         crossOrigin="anonymous"
       />
       <SizeFix />

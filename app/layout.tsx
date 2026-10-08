@@ -42,11 +42,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} bg-background`}
     >
       <head>
-        {/* Warm up connections to the map tile CDN so tiles paint instantly */}
-        <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://c.basemaps.cartocdn.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://d.basemaps.cartocdn.com" crossOrigin="anonymous" />
+        {/* Warm up connections to the map tile server so tiles paint promptly. */}
+        <link rel="preconnect" href="https://tile.openstreetmap.org" crossOrigin="anonymous" />
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>

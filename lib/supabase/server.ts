@@ -4,7 +4,7 @@ import { isSupabaseConfigured, SUPABASE_URL, SUPABASE_KEY } from "./config"
 
 /**
  * Server-side Supabase client. Returns null when env vars are missing
- * (demo mode) so callers can gracefully fall back.
+ * so callers can show a configuration-required state.
  *
  * Don't store this client in a global — always create a new one per request.
  */

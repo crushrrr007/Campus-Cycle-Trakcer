@@ -1,7 +1,5 @@
-import { cookies } from "next/headers"
 import { createClient } from "./server"
 import { isSupabaseConfigured } from "./config"
-import { DEMO_SESSION_COOKIE, parseDemoSession } from "@/lib/demo-auth"
 import type { UserRole } from "@/lib/types"
 
 export interface SessionUser {
@@ -15,14 +13,10 @@ export interface SessionUser {
 /**
  * Reads the current Supabase session and the user's profile (role lives in
  * public.profiles, never in client-editable metadata).
- * Returns null when signed out OR when Supabase isn't configured (demo mode).
+ * Returns null when signed out or when Supabase isn't configured.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  // DEMO MODE — no Supabase env vars: read the dummy session cookie instead.
-  if (!isSupabaseConfigured) {
-    const cookieStore = await cookies()
-    return parseDemoSession(cookieStore.get(DEMO_SESSION_COOKIE)?.value)
-  }
+  if (!isSupabaseConfigured) return null
 
   const supabase = await createClient()
   if (!supabase) return null

@@ -15,21 +15,52 @@ CLI stack. The scripts are plain SQL and portable.
 | 1 | `migrations/001_auth_and_profiles.sql` | `profiles` table (role: student/admin), @nitt.edu email enforcement trigger, auto-profile trigger, RLS |
 | 2 | `migrations/002_app_schema.sql` | `stations`, `bikes`, `service_records`, `rides`, `issues`, `notifications` tables + RLS policies |
 | 3 | `migrations/003_seed_app_data.sql` | Seeds the 10 campus stations and the bicycle fleet |
-| 4 | `seed/004_test_users.sql` | Creates the dummy **test accounts** (admin + student) directly in `auth.users` — works in the hosted SQL Editor |
+| 4 | `migrations/004_ride_rpcs.sql` | Secure borrow/return RPCs |
 | 5 | `migrations/005_public_stats.sql` | `public_stats()` RPC — anonymous aggregate counts for the sign-in page hero |
-| 6 | `seed/005_demo_data.sql` | **Demo/presentation data**: 8 extra students, ~320 rides over 30 days, active rides, issues, notifications |
 
-4. Get your credentials: project → **Settings → API**:
+The files under `seed/` are optional demo fixtures, not production setup.
+Create real users through the app rather than inserting into managed `auth.users`.
+
+4. Use credentials from **your own Supabase project**, not a v0 Marketplace resource:
    - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL` (looks like `https://xxxx.supabase.co`)
-   - **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-5. Copy `.env.example` to `.env.local`, paste both values, restart the dev
-   server. Real auth switches on automatically — no code changes needed.
+   - **Publishable key** → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - Alternatively, use the legacy **anon key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   - Only set one public-key variable. Never use a service-role or secret key in a public variable.
+5. In v0, enter these through the environment-variable form or project **Vars**.
+   The existing `NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL` is supplied by v0; retain it.
+   For local development, use `.env.example` as the template for `.env.local`.
 
-> **Email confirmation:** the two seeded test accounts are pre-confirmed and
-> log in immediately. New sign-ups through the app will receive a Supabase
-> confirmation email by default. For testing you can disable this in
-> **Authentication → Providers → Email → "Confirm email"** so new signups
-> can log in instantly.
+## Required eight-digit email verification settings
+
+Configure these in your personal project's Supabase Auth settings:
+
+- Enable email authentication and **Confirm email**. Do not disable confirmation.
+- Set **Email OTP length** to **8** (`mailer_otp_length: 8`). This is an Auth
+  service setting, not an application environment variable or database migration.
+- Set a suitable OTP expiration (for example, 600 seconds).
+- In **Confirm signup**, replace link-only content with a code template such as:
+
+  ```html
+  <h2>Verify your CycleNet college email</h2>
+  <p>Enter this 8-digit code in CycleNet:</p>
+  <p><strong>{{ .Token }}</strong></p>
+  <p>If you did not request this account, ignore this email.</p>
+  ```
+
+- Configure custom SMTP to deliver codes to actual `@nitt.edu` users. Supabase's
+  default mail service restricts recipients and has low sending limits.
+- Allow the application's `/auth/callback` URL and the existing v0 preview
+  redirect URL if you retain confirmation-link callbacks.
+
+Signup keeps the user on the eight-digit code screen. Supabase validates the
+code via `verifyOtp({ email, token, type: "email" })` and issues the real session.
+Resends use `auth.resend({ type: "signup", email })` with a 60-second UI cooldown;
+Supabase also enforces server-side limits. Unconfirmed password sign-ins can
+resume email verification and request a fresh signup code.
+
+Public API credentials cannot change hosted Auth settings. Configure the OTP
+length and template in your own account; the app cannot make six-digit emails
+into eight-digit emails by changing the input alone.
 
 ## Setup with the Supabase CLI (local, optional)
 
@@ -52,11 +83,12 @@ psql "$DATABASE_URL" -f supabase/seed/004_test_users.sql
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your anon key>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your publishable key>
 ```
 
-Until these are set the app runs in **demo mode** (in-memory data, dummy
-login with the same test credentials, role switch hidden while "signed in").
+The legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` is also supported as an alternative.
+Until the URL and a public key are set, authentication is disabled and protected
+pages redirect to sign-in. Dummy cookies do not grant access.
 
 ## Test credentials (dummy — for testing only)
 

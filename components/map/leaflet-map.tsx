@@ -118,11 +118,8 @@ function MapController({
 }
 
 export default function LeafletMap({ stations, selectedId, onSelect, editable, onMove }: LeafletMapProps) {
-  // CARTO Voyager tiles: OSM-based street map served from a fast global CDN
-  // (4 parallel subdomains) — dramatically quicker first paint than the
-  // donated openstreetmap.org tile servers, which often stall for seconds.
-  const tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-  const tileAttribution = "&copy; OpenStreetMap contributors &copy; CARTO"
+  const tileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+  const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 
   const markers = useMemo(
     () =>
@@ -150,13 +147,9 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
       <TileLayer
         url={tileUrl}
         attribution={tileAttribution}
-        subdomains="abcd"
-        maxZoom={20}
-        // Start loading tiles immediately while panning/zooming instead of
-        // waiting for movement to stop, and keep a ring of off-screen tiles
-        // cached so the map never looks blank at the edges.
-        updateWhenIdle={false}
-        keepBuffer={4}
+        maxZoom={19}
+        updateWhenIdle
+        keepBuffer={2}
         crossOrigin="anonymous"
       />
       {markers.map(({ station, icon }) => {

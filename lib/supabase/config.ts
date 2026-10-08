@@ -5,8 +5,8 @@
  *  - New publishable key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (sb_publishable_...)
  *  - Legacy anon key:     NEXT_PUBLIC_SUPABASE_ANON_KEY (eyJ...)
  *
- * When env vars are missing the app falls back to DEMO MODE:
- * in-memory data + dummy cookie-based auth.
+ * Authentication stays disabled until credentials for your own Supabase
+ * project are configured. No Marketplace integration is required.
  */
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
@@ -20,5 +20,5 @@ export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_KEY)
 export const NITT_DOMAIN = "@nitt.edu"
 
 export function isNittEmail(email: string) {
-  return email.toLowerCase().endsWith(NITT_DOMAIN)
+  return /^[^\s@]+@nitt\.edu$/i.test(email.trim())
 }

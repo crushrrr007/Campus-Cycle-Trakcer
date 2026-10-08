@@ -4,20 +4,17 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Bike, Eye, EyeOff, Info, Loader2 } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, Info, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { isNittEmail, isSupabaseConfigured, NITT_DOMAIN } from "@/lib/supabase/config"
-import { demoSignIn, demoSignUp, setDemoSessionCookie } from "@/lib/demo-auth"
+import { authErrorMessage } from "@/lib/supabase/auth-errors"
+import { EmailOtpVerification } from "@/components/auth/email-otp-verification"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 interface AuthFormProps {
   mode: "sign-in" | "sign-up"
 }
-
-const TEST_ACCOUNTS = [
-  { label: "Student", email: "106122045@nitt.edu", password: "Student@1234" },
-  { label: "Admin", email: "admin@nitt.edu", password: "Admin@1234" },
-]
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter()
@@ -27,7 +24,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [signUpDone, setSignUpDone] = useState(false)
+  const [verification, setVerification] = useState<{ email: string; codeSent: boolean } | null>(null)
 
   const isSignUp = mode === "sign-up"
 
@@ -48,55 +45,54 @@ export function AuthForm({ mode }: AuthFormProps) {
       return
     }
 
-    // DEMO MODE — no Supabase env vars: use the dummy in-preview auth.
+    if (loading) return
     if (!isSupabaseConfigured) {
-      setLoading(true)
-      if (isSignUp) {
-        setDemoSessionCookie(demoSignUp(name, email))
-      } else {
-        const { session, error: err } = demoSignIn(email, password)
-        if (!session) {
-          setError(err)
-          setLoading(false)
-          return
-        }
-        setDemoSessionCookie(session)
-      }
-      router.push("/dashboard")
-      router.refresh()
+      setError("Add your personal Supabase project credentials to enable authentication.")
       return
     }
 
+    const normalizedEmail = email.trim().toLowerCase()
     setLoading(true)
     try {
       const supabase = createClient()
       if (isSignUp) {
-        const { error: err } = await supabase.auth.signUp({
-          email,
+        const { data, error: err } = await supabase.auth.signUp({
+          email: normalizedEmail,
           password,
           options: {
             emailRedirectTo:
               process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
               `${window.location.origin}/auth/callback`,
             data: {
-              full_name: name,
+              full_name: name.trim(),
             },
           },
         })
         if (err) {
-          setError(err.message)
+          setError(authErrorMessage(err, "sign-up"))
           return
         }
-        setSignUpDone(true)
+        if (data.session) {
+          await supabase.auth.signOut()
+          setError("Email confirmation must be enabled in your Supabase project before registration can use verification codes.")
+          return
+        }
+        setPassword("")
+        setVerification({ email: normalizedEmail, codeSent: true })
         return
       } else {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+        const { error: err } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
         if (err) {
-          setError(err.message === "Invalid login credentials" ? "Invalid email or password" : err.message)
+          if (err.code === "email_not_confirmed") {
+            setPassword("")
+            setVerification({ email: normalizedEmail, codeSent: false })
+            return
+          }
+          setError(authErrorMessage(err, "sign-in"))
           return
         }
       }
-      router.push("/dashboard")
+      router.replace("/dashboard")
       router.refresh()
     } catch {
       setError("Something went wrong. Please try again.")
@@ -105,28 +101,22 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
-  if (signUpDone) {
+  if (verification) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
-            <Bike className="size-7 text-primary" />
-          </div>
-          <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-            Check your inbox
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            We sent a confirmation link to{" "}
-            <span className="font-medium text-foreground">{email}</span>. Confirm your college
-            email to activate your CycleNet account.
-          </p>
-          <Link
-            href="/sign-in"
-            className="mt-6 inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
-          >
-            Back to sign in
-            <ArrowRight className="size-4" />
-          </Link>
+      <div className="flex min-h-screen flex-1 items-center justify-center bg-background px-5 py-10">
+        <div className="w-full max-w-sm">
+          <EmailOtpVerification
+            email={verification.email}
+            codeSent={verification.codeSent}
+            onVerified={() => {
+              router.replace("/dashboard")
+              router.refresh()
+            }}
+            onBack={() => {
+              setVerification(null)
+              setError(null)
+            }}
+          />
         </div>
       </div>
     )
@@ -163,18 +153,14 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
 
         {!isSupabaseConfigured && (
-          <div className="mb-6 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-            <Info className="mt-0.5 size-3.5 shrink-0 text-primary" />
-            <span>
-              <span className="font-medium text-foreground">Demo mode.</span> Supabase is not connected,
-              so dummy auth is active — {isSignUp ? (
-                <>sign up with any <span className="font-mono">@nitt.edu</span> email</>
-              ) : (
-                <>use the test credentials below</>
-              )}. Real auth activates once you set the env vars (see{" "}
-              <span className="font-mono">supabase/README.md</span>).
-            </span>
-          </div>
+          <Alert className="mb-6">
+            <Info />
+            <AlertTitle>Supabase configuration required</AlertTitle>
+            <AlertDescription>
+              Add your personal Supabase project URL and publishable or anon key in project Vars.
+              Authentication stays disabled until your credentials are configured.
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Heading */}
@@ -277,7 +263,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
           <button
             type="submit"
-            disabled={loading || (email !== "" && !isNittEmail(email))}
+            disabled={!isSupabaseConfigured || loading || (email !== "" && !isNittEmail(email))}
             className="group mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
             {loading ? (
@@ -290,42 +276,6 @@ export function AuthForm({ mode }: AuthFormProps) {
             )}
           </button>
         </form>
-
-        {/* One-tap test accounts (sign-in only) */}
-        {!isSignUp && (
-          <div className="mt-6">
-            <div className="flex items-center gap-3" aria-hidden="true">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                Quick sign in
-              </span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-            <div className="mt-3.5 grid grid-cols-2 gap-2.5">
-              {TEST_ACCOUNTS.map((acct) => (
-                <button
-                  key={acct.email}
-                  type="button"
-                  disabled={loading}
-                  onClick={() => {
-                    setEmail(acct.email)
-                    setPassword(acct.password)
-                    setError(null)
-                  }}
-                  className="flex flex-col items-start gap-0.5 rounded-xl border border-dashed bg-muted/30 px-3.5 py-3 text-left transition hover:border-primary/40 hover:bg-accent active:scale-[0.98] disabled:opacity-50"
-                >
-                  <span className="text-sm font-semibold text-foreground">{acct.label}</span>
-                  <span className="w-full truncate font-mono text-[11px] text-muted-foreground">
-                    {acct.email}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              Tap an account to autofill, then press Sign in
-            </p>
-          </div>
-        )}
 
         {/* Footer */}
         <p className="mt-8 text-center text-sm text-muted-foreground">

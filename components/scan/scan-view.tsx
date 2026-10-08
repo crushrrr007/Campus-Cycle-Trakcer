@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { freeDocks, isUsableStation } from "@/lib/station-navigation"
 import QRCode from "qrcode"
 import {
   QrCodeIcon,
@@ -21,6 +22,7 @@ import { Separator } from "@/components/ui/separator"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -76,7 +78,7 @@ export function ScanView() {
             n={2}
             icon={BikeIcon}
             title="Ride across campus"
-            text="The bike is checked out to your account and tracked live on the campus map."
+            text="The bike is checked out to your account. The campus map shows updated station availability, not your ride location."
           />
           <Step
             n={3}
@@ -104,10 +106,21 @@ function BorrowPanel({
   onBorrow,
 }: {
   availableCodes: string[]
-  onBorrow: (code: string) => void
+  onBorrow: (code: string) => Promise<void>
 }) {
   const [code, setCode] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const pending = useRef(false)
   const suggestion = availableCodes[0] ?? ""
+
+  async function submitBorrow(value: string) {
+    if (pending.current || !value.trim()) return
+    pending.current = true
+    setSubmitting(true)
+    try { await onBorrow(value.trim()) }
+    catch { toast.error("Unable to borrow the bike. Please try again.") }
+    finally { pending.current = false; setSubmitting(false) }
+  }
 
   return (
     <Card>
@@ -124,7 +137,7 @@ function BorrowPanel({
             // QR stickers encode "NITTBIKE:NITT-XXXX" — strip the prefix if present.
             const parsed = raw.startsWith("NITTBIKE:") ? raw.slice("NITTBIKE:".length) : raw
             setCode(parsed.toUpperCase())
-            onBorrow(parsed.toUpperCase())
+            void submitBorrow(parsed.toUpperCase())
           }}
         />
         <div className="flex flex-col gap-2">
@@ -135,11 +148,11 @@ function BorrowPanel({
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing || e.keyCode === 229) return
-                if (e.key === "Enter" && code.trim()) onBorrow(code.trim())
+                if (e.key === "Enter" && code.trim()) void submitBorrow(code.trim())
               }}
             />
-            <Button onClick={() => code.trim() && onBorrow(code.trim())} disabled={!code.trim()}>
-              Borrow
+            <Button onClick={() => void submitBorrow(code)} disabled={!code.trim() || submitting}>
+              {submitting ? "Borrowing…" : "Borrow"}
             </Button>
           </div>
           {suggestion && (
@@ -168,10 +181,23 @@ function ReturnPanel({
   stations: ReturnType<typeof useStore>["stations"]
   stationName: (id: string | null) => string
   getBike: ReturnType<typeof useStore>["getBike"]
-  onReturn: (dest: string) => void
+  onReturn: (dest: string) => Promise<void>
 }) {
-  const [dest, setDest] = useState(stations[0]?.id ?? "")
+  const [dest, setDest] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const pending = useRef(false)
+  const selectedStation = stations.find((station) => station.id === dest)
+  const canReturn = !!selectedStation && isUsableStation(selectedStation, "return")
   const [qr, setQr] = useState<string>("")
+
+  async function submitReturn() {
+    if (pending.current || !canReturn) return
+    pending.current = true
+    setSubmitting(true)
+    try { await onReturn(dest) }
+    catch { toast.error("Unable to return the bike. Please try again.") }
+    finally { pending.current = false; setSubmitting(false) }
+  }
   const bike = ride ? getBike(ride.bikeId) : undefined
 
   useEffect(() => {
@@ -214,26 +240,28 @@ function ReturnPanel({
         <Separator />
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium">Return to station</label>
+          <label htmlFor="return-station" className="text-sm font-medium">Return to station</label>
           <Select
             value={dest}
             onValueChange={(v) => v && setDest(v)}
-            items={stations.map((s) => ({ value: s.id, label: `${s.name} · ${s.available} free` }))}
+            items={stations.map((s) => ({ value: s.id, label: `${s.name} · ${s.capacity <= 0 || s.status === "offline" ? "Offline" : `${freeDocks(s)} free docks`}` }))}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger id="return-station" className="w-full">
               <SelectValue placeholder="Choose a station" />
             </SelectTrigger>
             <SelectContent>
-              {stations.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name} · {s.available} free
+              <SelectGroup>{stations.map((s) => (
+                <SelectItem key={s.id} value={s.id} disabled={!isUsableStation(s, "return")}>
+                  {s.name} · {s.capacity <= 0 || s.status === "offline" ? "Offline" : `${freeDocks(s)} free docks`}
                 </SelectItem>
-              ))}
+              ))}</SelectGroup>
             </SelectContent>
           </Select>
-          <Button className="mt-1" onClick={() => dest && onReturn(dest)} disabled={!dest}>
+          {dest && !canReturn && <p role="alert" className="text-sm text-muted-foreground">This station no longer has an open dock. Choose another destination.</p>}
+          <p className="text-sm leading-relaxed text-muted-foreground">Bikes under maintenance also occupy docks and are excluded from the free-dock count. Availability is checked again when you confirm.</p>
+          <Button onClick={() => void submitReturn()} disabled={!canReturn || submitting}>
             <CheckCircle2Icon data-icon="inline-start" />
-            Confirm return
+            {submitting ? "Returning…" : "Confirm return"}
           </Button>
         </div>
       </CardContent>

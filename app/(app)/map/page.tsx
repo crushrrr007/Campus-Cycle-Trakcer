@@ -6,6 +6,8 @@ import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
 import { InteractiveMap } from "@/components/map/interactive-map"
 import { StationPanel } from "@/components/map/station-panel"
+import { NearestStationFinder } from "@/components/map/nearest-station-finder"
+import type { StationPurpose } from "@/lib/station-navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,11 +17,14 @@ import { cn } from "@/lib/utils"
 import { StationFrameAvailability } from "@/components/bike-frame-info"
 
 export default function MapPage() {
-  const { stations, activeRides, role, updateStation } = useStore()
+  const { stations, bikes, myActiveRide, role, updateStation, dataLoading, dataError } = useStore()
+  const [purposeOverride, setPurposeOverride] = useState<StationPurpose | null>(null)
+  const purpose = purposeOverride ?? (myActiveRide ? "return" : "borrow")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [lowFrameOnly, setLowFrameOnly] = useState(false)
-  const visibleStations = lowFrameOnly ? stations.filter((station) => station.stepThroughAvailable > 0) : stations
+  const effectiveLowFrameOnly = lowFrameOnly && purpose === "borrow"
+  const visibleStations = effectiveLowFrameOnly ? stations.filter((station) => station.stepThroughAvailable > 0) : stations
   const selected = stations.find((s) => s.id === selectedId) ?? null
   const isAdmin = role === "admin"
 
@@ -57,25 +62,36 @@ export default function MapPage() {
         }
       />
 
+      {!editing && <NearestStationFinder
+        stations={stations}
+        purpose={purpose}
+        onPurposeChange={(value) => { setPurposeOverride(value); setSelectedId(null) }}
+        lowFrameOnly={effectiveLowFrameOnly}
+        onSelect={setSelectedId}
+        loading={dataLoading}
+        unavailable={dataError}
+      />}
+
       <div className="flex flex-wrap items-center gap-3">
         <Button
-          variant={lowFrameOnly ? "default" : "outline"}
-          aria-pressed={lowFrameOnly}
-          disabled={editing}
+          variant={effectiveLowFrameOnly ? "default" : "outline"}
+          aria-pressed={effectiveLowFrameOnly}
+          disabled={editing || purpose === "return"}
           onClick={() => { setLowFrameOnly((value) => !value); setSelectedId(null) }}
         >
           Low-frame bikes only
         </Button>
         <p className="text-sm leading-relaxed text-muted-foreground" role="status">
-          {lowFrameOnly
+          {effectiveLowFrameOnly
             ? `${visibleStations.length} stations with low-frame bikes available`
             : "Pin numbers show available bikes. Select a station to see its frame types."}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="relative overflow-hidden p-0">
-          <div className="absolute left-3 top-3 z-[1200] flex flex-wrap items-center gap-3 rounded-lg border bg-card/90 px-3 py-2 backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-3 py-2 text-card-foreground">
+          <div className="flex flex-wrap items-center gap-3">
             {HEALTH_LEGEND.map((l) => (
               <div key={l.key} className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-full" style={{ backgroundColor: l.color }} />
@@ -83,11 +99,12 @@ export default function MapPage() {
               </div>
             ))}
           </div>
-          <div className="absolute right-3 top-3 z-[1200] flex items-center gap-1.5 rounded-lg border bg-card/90 px-3 py-2 backdrop-blur">
+          <div className="flex items-center gap-1.5">
             <span className="size-2 animate-marker rounded-full bg-primary" />
             <span className="text-xs text-muted-foreground">
-              {activeRides.length} bikes in transit
+              {bikes.filter((bike) => bike.status === "in-use").length} bikes in transit
             </span>
+          </div>
           </div>
           {editing && (
             <div className="absolute inset-x-0 bottom-3 z-[1200] mx-auto flex w-fit items-center gap-2 rounded-full border bg-card/95 px-4 py-2 shadow-md backdrop-blur">
@@ -95,7 +112,7 @@ export default function MapPage() {
               <span className="text-xs font-medium">Drag any station marker to reposition it</span>
             </div>
           )}
-          <div className="aspect-[10/7] w-full">
+          <div className="w-full shrink-0" style={{ height: "24rem" }}>
             <InteractiveMap
               stations={visibleStations}
               selectedId={selectedId}
@@ -111,20 +128,20 @@ export default function MapPage() {
             <StationPanel
               station={selected}
               editing={isAdmin && editing}
-              lowFrameOnly={lowFrameOnly}
+              lowFrameOnly={effectiveLowFrameOnly}
               onClose={() => setSelectedId(null)}
             />
           ) : (
             <div className="flex flex-col">
               <div className="p-4">
-                <h2 className="text-base font-semibold">{lowFrameOnly ? "Low-frame availability" : "All stations"}</h2>
+                <h2 className="text-base font-semibold">{effectiveLowFrameOnly ? "Low-frame availability" : "All stations"}</h2>
                 <p className="text-sm text-muted-foreground">
                   {isAdmin && editing
                     ? "Select a station to edit its details."
                     : "Select a station for details."}
                 </p>
               </div>
-              {visibleStations.length === 0 && lowFrameOnly && (
+              {visibleStations.length === 0 && effectiveLowFrameOnly && (
                 <div className="flex flex-col gap-3 px-4 pb-4">
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     No low-frame bikes available right now. Unclassified bikes are not counted until inspected by an admin.

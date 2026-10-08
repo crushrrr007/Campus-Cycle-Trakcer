@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { isUsableStation } from "@/lib/station-navigation"
 import { Bike as BikeIcon, MapPin, Navigation, Save, Wrench, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,10 +30,19 @@ export function StationPanel({
   const maintenance = atStation.filter((b) => b.status === "maintenance")
   const visibleBikes = lowFrameOnly ? available.filter((bike) => bike.frameType === "step-through") : atStation
 
+  const [borrowing, setBorrowing] = useState(false)
+  const pending = useRef(false)
+
   async function handleBorrow(bikeId: string) {
-    const res = await borrowBike(bikeId)
-    if (res.ok) toast.success(res.message)
-    else toast.error(res.message)
+    if (pending.current) return
+    pending.current = true
+    setBorrowing(true)
+    try {
+      const res = await borrowBike(bikeId)
+      if (res.ok) toast.success(res.message)
+      else toast.error(res.message)
+    } catch { toast.error("Unable to borrow the bike. Please try again.") }
+    finally { pending.current = false; setBorrowing(false) }
   }
 
   if (editing && role === "admin") {
@@ -125,7 +135,7 @@ export function StationPanel({
                       size="sm"
                       className="shrink-0"
                       onClick={() => handleBorrow(b.id)}
-                      disabled={!!myActiveRide}
+                      disabled={!!myActiveRide || borrowing || !isUsableStation(station, "borrow")}
                     >
                       <Navigation data-icon="inline-start" />
                       Borrow

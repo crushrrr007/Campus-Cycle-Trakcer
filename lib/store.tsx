@@ -7,6 +7,7 @@ import { STATION_DEFS } from "./campus"
 import { CURRENT_ADMIN, CURRENT_STUDENT, seedData } from "./data"
 import { getFrameAvailability, isBikeFrameType } from "./bike-frames"
 import { isSupabaseConfigured } from "./supabase/config"
+import { useNotifications } from "./use-notifications"
 import { createIssueInDb, fetchIssuesFromDb, updateIssueStatusInDb } from "./issues-db"
 import {
   createStationInDb,
@@ -96,7 +97,10 @@ interface StoreValue {
   addStation: (data: Omit<Station, "status" | "id" | "x" | "y"> & { id?: string }) => Promise<ActionResult>
   updateStation: (id: string, data: Partial<Station>) => Promise<ActionResult>
   deleteStation: (id: string) => Promise<ActionResult>
-  markAllRead: () => void
+  notificationsLoading: boolean
+  notificationsError: boolean
+  markingRead: boolean
+  markAllRead: () => Promise<void>
   getBike: (id: string) => Bike | undefined
   stationName: (id: string | null) => string
   reportIssue: (data: {
@@ -131,7 +135,6 @@ export function StoreProvider({
   const seed = useMemo(() => seedData(), [])
   const [localBikes, setLocalBikes] = useState<Bike[]>(seed.bikes)
   const [localRides, setLocalRides] = useState<Ride[]>(seed.rides)
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => sessionUser ? [] : seed.notifications)
   // Demo-mode issues live in memory; real mode reads from Supabase below.
   const [localIssues, setLocalIssues] = useState<IssueReport[]>(() => [
     {
@@ -176,6 +179,7 @@ export function StoreProvider({
   // Real mode: issues are persisted in Supabase. RLS scopes the result —
   // students only receive their own reports, admins receive everything.
   const realMode = Boolean(sessionUser) && isSupabaseConfigured
+  const { notifications, pushNotification, markAllRead, markingRead, notificationsLoading, notificationsError, refreshNotifications } = useNotifications(realMode, sessionUser?.id, seed.notifications)
   const { data: dbIssues, error: issuesError, isLoading: issuesLoading, mutate: mutateIssues } = useSWR(
     realMode ? ["db-issues", sessionUser?.id] : null,
     fetchIssuesFromDb,
@@ -245,8 +249,7 @@ export function StoreProvider({
     return stationDefs.map((def) => {
       const atStation = bikes.filter((b) => b.stationId === def.id)
       const available = atStation.filter((b) => b.status === "available").length
-      const maintenance = atStation.filter((b) => b.status === "maintenance").length
-      const occupied = available + maintenance
+      const occupied = atStation.length
       const utilization = def.capacity > 0 ? Math.round((occupied / def.capacity) * 100) : 0
       return {
         ...def,
@@ -274,19 +277,12 @@ export function StoreProvider({
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
-  const pushNotification = useCallback((n: Omit<AppNotification, "id" | "time" | "read">) => {
-    setNotifications((prev) => [
-      { ...n, id: `NTF-${seqCounter++}`, time: new Date().toISOString(), read: false },
-      ...prev,
-    ])
-  }, [])
-
   const stationName = useCallback(
     (id: string | null) => stationDefs.find((s) => s.id === id)?.name ?? "—",
     [stationDefs],
   )
 
-  const borrowBike = useCallback(
+  const borrowBikeAction = useCallback(
     async (bikeId: string): Promise<BorrowResult> => {
       // ── Real mode: atomic RPC in Supabase. The database enforces one active
       // ride per user and rejects unavailable bikes. ────────────────────────
@@ -342,7 +338,7 @@ export function StoreProvider({
     [bikes, rides, currentUser.id, currentUser.name, pushNotification, stationName, realMode, mutateBikes, mutateRides],
   )
 
-  const returnBike = useCallback(
+  const returnBikeAction = useCallback(
     async (bikeId: string, destStationId: string): Promise<BorrowResult> => {
       // ── Real mode: atomic RPC in Supabase (checks ownership + capacity) ───
       if (realMode) {
@@ -361,6 +357,7 @@ export function StoreProvider({
         return { ok: false, message: `${bike.id} is not currently checked out.` }
 
       const destStation = stationDefs.find((s) => s.id === destStationId)
+      if (!destStation || destStation.capacity <= 0) return { ok: false, message: "Choose an open return station." }
       if (destStation) {
         const docked = bikes.filter((b) => b.stationId === destStationId).length
         if (docked >= destStation.capacity)
@@ -371,6 +368,7 @@ export function StoreProvider({
       }
 
       const ride = rides.find((r) => r.bikeId === bike.id && r.status === "active")
+      if (!ride || (ride.userId !== currentUser.id && currentUser.role !== "admin")) return { ok: false, message: "This bicycle is checked out by another rider." }
       const now = Date.now()
       const duration = ride ? Math.max(1, Math.round((now - new Date(ride.borrowTime).getTime()) / 60000)) : 1
 
@@ -391,8 +389,22 @@ export function StoreProvider({
       })
       return { ok: true, message: `${bike.id} returned. Ride duration: ${duration} min.` }
     },
-    [bikes, rides, stationDefs, pushNotification, stationName, realMode, mutateBikes, mutateRides],
+    [bikes, rides, stationDefs, currentUser.id, currentUser.role, pushNotification, stationName, realMode, mutateBikes, mutateRides],
   )
+
+  const rideActionPending = React.useRef(false)
+  const borrowBike = useCallback(async (bikeId: string): Promise<BorrowResult> => {
+    if (rideActionPending.current) return { ok: false, message: "A ride action is already in progress." }
+    rideActionPending.current = true
+    try { return await borrowBikeAction(bikeId) }
+    finally { rideActionPending.current = false }
+  }, [borrowBikeAction])
+  const returnBike = useCallback(async (bikeId: string, destStationId: string): Promise<BorrowResult> => {
+    if (rideActionPending.current) return { ok: false, message: "A ride action is already in progress." }
+    rideActionPending.current = true
+    try { return await returnBikeAction(bikeId, destStationId) }
+    finally { rideActionPending.current = false }
+  }, [returnBikeAction])
 
   const addBike = useCallback(
     async (data: Partial<Bike>): Promise<string | null> => {
@@ -774,15 +786,11 @@ export function StoreProvider({
     [issues, currentUser.id],
   )
 
-  const markAllRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  }, [])
-
   const getBike = useCallback((id: string) => bikes.find((b) => b.id === id || b.qr === id), [bikes])
 
   const refreshData = useCallback(async () => {
-    await Promise.all([mutateBikes(), mutateRides(), mutateStations(), mutateIssues()])
-  }, [mutateBikes, mutateRides, mutateStations, mutateIssues])
+    await Promise.all([mutateBikes(), mutateRides(), mutateStations(), mutateIssues(), refreshNotifications()])
+  }, [mutateBikes, mutateRides, mutateStations, mutateIssues, refreshNotifications])
 
   const value: StoreValue = {
     dataLoading: realMode && Boolean(bikesLoading || ridesLoading || stationsLoading || issuesLoading),
@@ -812,6 +820,9 @@ export function StoreProvider({
     updateStation,
     deleteStation,
     markAllRead,
+    notificationsLoading,
+    notificationsError,
+    markingRead,
     getBike,
     stationName,
     issues,

@@ -53,6 +53,7 @@ export interface Ride {
 
 export interface AppNotification {
   id: string
+  userId?: string | null
   type: "borrow" | "return" | "low-stock" | "full" | "maintenance" | "announcement"
   title: string
   message: string

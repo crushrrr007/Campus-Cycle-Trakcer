@@ -110,6 +110,20 @@ function MapController({
   return null
 }
 
+function SelectedStationController({ stations, selectedId }: Pick<InteractiveMapProps, "stations" | "selectedId">) {
+  const map = useMap()
+  const station = stations.find((item) => item.id === selectedId)
+  const lat = station?.lat
+  const lng = station?.lng
+  useEffect(() => {
+    if (lat !== undefined && lng !== undefined) {
+      map.invalidateSize({ animate: false })
+      map.setView([lat, lng], Math.max(map.getZoom(), 17), { animate: false })
+    }
+  }, [map, selectedId, lat, lng])
+  return null
+}
+
 export default function LeafletMap({ stations, selectedId, onSelect, editable, onMove }: InteractiveMapProps) {
   const tileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
   const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -153,7 +167,7 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
         const markerLabel = `${station.name}: ${station.available} available, ${station.stepThroughAvailable} low-frame, ${station.stepOverAvailable} high-frame, ${station.unclassifiedAvailable} awaiting frame inspection`
         return (
           <Marker
-            key={station.id}
+            key={`${station.id}:${markerLabel}`}
             position={[station.lat, station.lng]}
             icon={icon}
             title={markerLabel}
@@ -208,6 +222,7 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
         )
       })}
       <MapController stations={stations} />
+      <SelectedStationController stations={stations} selectedId={selectedId} />
     </MapContainer>
   )
 }

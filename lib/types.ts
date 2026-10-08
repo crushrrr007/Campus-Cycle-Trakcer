@@ -1,4 +1,5 @@
 export type BikeStatus = "available" | "in-use" | "maintenance"
+export type BikeFrameType = "unclassified" | "step-through" | "step-over"
 export type StationStatus = "active" | "low" | "full" | "offline"
 export type UserRole = "student" | "admin"
 
@@ -18,6 +19,7 @@ export interface Bike {
   lastServiceDate: string // ISO
   serviceHistory: ServiceRecord[]
   model: string
+  frameType: BikeFrameType
   condition: number // 0-100
 }
 

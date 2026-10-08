@@ -23,6 +23,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { useStore, type StationStats } from "@/lib/store"
 import type { Bike } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { BikeFrameBadge, StationFrameAvailability } from "@/components/bike-frame-info"
 
 const STATUS_STYLES: Record<string, string> = {
   available: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -37,6 +38,7 @@ interface StationBikesSheetProps {
 /** Admin view: every bicycle docked at a station, with per-bike relocation. */
 export function StationBikesSheet({ station, onClose }: StationBikesSheetProps) {
   const { bikes, stations, moveBike } = useStore()
+  const currentStation = stations.find((item) => item.id === station?.id) ?? station
 
   const atStation = useMemo(
     () => (station ? bikes.filter((b) => b.stationId === station.id) : []),
@@ -57,11 +59,12 @@ export function StationBikesSheet({ station, onClose }: StationBikesSheetProps) 
               <SheetTitle>{station.name}</SheetTitle>
               <SheetDescription>
                 {atStation.length} bicycle{atStation.length === 1 ? "" : "s"} docked ·{" "}
-                {station.available} available · {station.capacity} docks total
+                {currentStation?.available ?? 0} available · {station.capacity} docks total
               </SheetDescription>
             </SheetHeader>
 
             <div className="flex flex-col gap-2 px-4 pb-6">
+              {currentStation && <StationFrameAvailability station={currentStation} admin />}
               {atStation.length === 0 ? (
                 <Empty>
                   <EmptyHeader>
@@ -137,6 +140,7 @@ function BikeRow({
         </Badge>
       </div>
 
+      <BikeFrameBadge frameType={bike.frameType} />
       <div className="flex items-center gap-2">
         <Select value={dest} onValueChange={(v) => v && setDest(v)}>
           <SelectTrigger className="flex-1" aria-label={`Move ${bike.id} to station`}>
@@ -150,7 +154,7 @@ function BikeRow({
                 disabled={s.occupied >= s.capacity}
               >
                 {s.shortName} ({s.occupied}/{s.capacity}
-                {s.occupied >= s.capacity ? " · full" : ""})
+                {s.occupied >= s.capacity ? " · full" : ""}) · {s.stepThroughAvailable} low-frame
               </SelectItem>
             ))}
           </SelectContent>

@@ -4,6 +4,7 @@
 // Borrow/return flows go through security-definer RPCs (see rides-db.ts).
 
 import { createClient } from "@/lib/supabase/client"
+import { isBikeFrameType } from "@/lib/bike-frames"
 import type { Bike, ServiceRecord } from "@/lib/types"
 
 interface ServiceRecordRow {
@@ -19,6 +20,7 @@ interface BikeRow {
   status: Bike["status"]
   station_id: string | null
   model: string
+  frame_type: string
   condition: number
   usage_count: number
   last_service_date: string
@@ -35,6 +37,7 @@ function mapRow(row: BikeRow): Bike {
     status: row.status,
     stationId: row.station_id,
     model: row.model,
+    frameType: isBikeFrameType(row.frame_type) ? row.frame_type : "unclassified",
     condition: row.condition,
     usageCount: row.usage_count,
     lastServiceDate: row.last_service_date,
@@ -48,7 +51,7 @@ export async function fetchBikesFromDb(): Promise<Bike[]> {
   const { data, error } = await supabase
     .from("bikes")
     .select(
-      "id, qr, status, station_id, model, condition, usage_count, last_service_date, service_records (id, type, notes, created_at)",
+      "id, qr, status, station_id, model, frame_type, condition, usage_count, last_service_date, service_records (id, type, notes, created_at)",
     )
     .order("id")
 
@@ -58,6 +61,7 @@ export async function fetchBikesFromDb(): Promise<Bike[]> {
 
 /** Register a new bicycle. RLS: admins only. */
 export async function createBikeInDb(bike: Bike): Promise<{ ok: boolean; message: string }> {
+  if (!isBikeFrameType(bike.frameType)) return { ok: false, message: "Please select a valid frame type." }
   const supabase = createClient()
   const { error } = await supabase.from("bikes").insert({
     id: bike.id,
@@ -65,6 +69,7 @@ export async function createBikeInDb(bike: Bike): Promise<{ ok: boolean; message
     status: bike.status,
     station_id: bike.stationId,
     model: bike.model,
+    frame_type: bike.frameType,
     condition: bike.condition,
     usage_count: bike.usageCount,
     last_service_date: bike.lastServiceDate,
@@ -86,6 +91,10 @@ export async function updateBikeInDb(
   if (data.status !== undefined) patch.status = data.status
   if (data.stationId !== undefined) patch.station_id = data.stationId
   if (data.model !== undefined) patch.model = data.model
+  if (data.frameType !== undefined) {
+    if (!isBikeFrameType(data.frameType)) return { ok: false, message: "Please select a valid frame type." }
+    patch.frame_type = data.frameType
+  }
   if (data.condition !== undefined) patch.condition = data.condition
   if (data.usageCount !== undefined) patch.usage_count = data.usageCount
   if (data.lastServiceDate !== undefined) patch.last_service_date = data.lastServiceDate

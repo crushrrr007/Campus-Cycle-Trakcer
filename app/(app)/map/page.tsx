@@ -12,11 +12,14 @@ import { Button } from "@/components/ui/button"
 import { useStore } from "@/lib/store"
 import { HEALTH_LEGEND, getStationHealthColor } from "@/lib/station-health"
 import { cn } from "@/lib/utils"
+import { StationFrameAvailability } from "@/components/bike-frame-info"
 
 export default function MapPage() {
   const { stations, activeRides, role, updateStation } = useStore()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
+  const [lowFrameOnly, setLowFrameOnly] = useState(false)
+  const visibleStations = lowFrameOnly ? stations.filter((station) => station.stepThroughAvailable > 0) : stations
   const selected = stations.find((s) => s.id === selectedId) ?? null
   const isAdmin = role === "admin"
 
@@ -45,7 +48,7 @@ export default function MapPage() {
           isAdmin ? (
             <Button
               variant={editing ? "default" : "outline"}
-              onClick={() => setEditing((v) => !v)}
+              onClick={() => { setEditing((v) => !v); setLowFrameOnly(false) }}
             >
               {editing ? <Move data-icon /> : <Pencil data-icon />}
               {editing ? "Done editing" : "Edit layout"}
@@ -53,6 +56,22 @@ export default function MapPage() {
           ) : undefined
         }
       />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant={lowFrameOnly ? "default" : "outline"}
+          aria-pressed={lowFrameOnly}
+          disabled={editing}
+          onClick={() => { setLowFrameOnly((value) => !value); setSelectedId(null) }}
+        >
+          Low-frame bikes only
+        </Button>
+        <p className="text-sm leading-relaxed text-muted-foreground" role="status">
+          {lowFrameOnly
+            ? `${visibleStations.length} stations with verified step-through bikes available`
+            : "Step-through / low-frame bikes offer easier mounting for any rider."}
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <Card className="relative overflow-hidden p-0">
@@ -78,7 +97,7 @@ export default function MapPage() {
           )}
           <div className="aspect-[10/7] w-full">
             <InteractiveMap
-              stations={stations}
+              stations={visibleStations}
               selectedId={selectedId}
               onSelect={setSelectedId}
               editable={isAdmin && editing}
@@ -92,20 +111,29 @@ export default function MapPage() {
             <StationPanel
               station={selected}
               editing={isAdmin && editing}
+              lowFrameOnly={lowFrameOnly}
               onClose={() => setSelectedId(null)}
             />
           ) : (
             <div className="flex flex-col">
               <div className="p-4">
-                <h2 className="text-base font-semibold">All stations</h2>
+                <h2 className="text-base font-semibold">{lowFrameOnly ? "Low-frame availability" : "All stations"}</h2>
                 <p className="text-sm text-muted-foreground">
                   {isAdmin && editing
                     ? "Select a station to edit its details."
                     : "Select a station for details."}
                 </p>
               </div>
+              {visibleStations.length === 0 && lowFrameOnly && (
+                <div className="flex flex-col gap-3 px-4 pb-4">
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    No verified low-frame bikes available right now. Unclassified bikes are not counted until inspected by an admin.
+                  </p>
+                  <Button variant="outline" onClick={() => setLowFrameOnly(false)}>Show all stations</Button>
+                </div>
+              )}
               <ul className="flex flex-col gap-1 px-2 pb-2">
-                {stations.map((s) => (
+                {visibleStations.map((s) => (
                   <li key={s.id}>
                     <button
                       onClick={() => setSelectedId(s.id)}
@@ -124,6 +152,7 @@ export default function MapPage() {
                         <div className="flex flex-col">
                           <span className="text-sm font-medium">{s.shortName}</span>
                           <span className="text-xs text-muted-foreground">{s.zone}</span>
+                          <StationFrameAvailability station={s} />
                         </div>
                       </div>
                       <Badge variant="secondary" className="font-mono tabular-nums">

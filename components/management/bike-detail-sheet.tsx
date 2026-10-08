@@ -35,6 +35,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { BikeFrameBadge } from "@/components/bike-frame-info"
 
 const SERVICE_TYPES = ["Tune-up", "Brake adjustment", "Tire replacement", "Chain service", "Other"]
 
@@ -142,6 +143,10 @@ export function BikeDetailSheet({ bikeId, onClose, onEdit }: BikeDetailSheetProp
               </SheetHeader>
 
               <div className="grid gap-4 px-4 pb-6">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-sm text-muted-foreground">Frame type</p>
+                  <BikeFrameBadge frameType={bike.frameType} />
+                </div>
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md border p-3">

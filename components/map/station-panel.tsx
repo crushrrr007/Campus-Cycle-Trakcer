@@ -10,20 +10,24 @@ import { Separator } from "@/components/ui/separator"
 import { StationStatusBadge } from "@/components/status-badge"
 import { useStore, type StationStats } from "@/lib/store"
 import { toast } from "sonner"
+import { BikeFrameBadge, StationFrameAvailability } from "@/components/bike-frame-info"
 
 export function StationPanel({
   station,
   editing = false,
+  lowFrameOnly = false,
   onClose,
 }: {
   station: StationStats
   editing?: boolean
+  lowFrameOnly?: boolean
   onClose: () => void
 }) {
   const { bikes, role, borrowBike, updateStation, myActiveRide } = useStore()
   const atStation = bikes.filter((b) => b.stationId === station.id)
   const available = atStation.filter((b) => b.status === "available")
   const maintenance = atStation.filter((b) => b.status === "maintenance")
+  const visibleBikes = lowFrameOnly ? available.filter((bike) => bike.frameType === "step-through") : atStation
 
   async function handleBorrow(bikeId: string) {
     const res = await borrowBike(bikeId)
@@ -74,6 +78,10 @@ export function StationPanel({
           <Progress value={station.utilization} />
         </div>
 
+        <StationFrameAvailability station={station} admin={role === "admin"} />
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Step-through / low-frame bikes are easier to mount. Anyone can use them; check saddle height and fit before borrowing.
+        </p>
         <div className="grid grid-cols-3 gap-2 text-center">
           <Stat label="Available" value={available.length} />
           <Stat label="In service" value={maintenance.length} />
@@ -84,16 +92,18 @@ export function StationPanel({
       <Separator />
 
       <div className="flex items-center justify-between px-4 py-3">
-        <h3 className="text-sm font-medium">Bicycles at this station</h3>
-        <span className="text-xs text-muted-foreground">{atStation.length}</span>
+        <h3 className="text-sm font-medium">{lowFrameOnly ? "Available low-frame bicycles" : "Bicycles at this station"}</h3>
+        <span className="text-sm text-muted-foreground">{visibleBikes.length}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        {atStation.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No bicycles docked here right now.</p>
+        {visibleBikes.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {lowFrameOnly ? "No verified low-frame bicycles available here right now. Choose another station or show all bikes." : "No bicycles docked here right now."}
+          </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {atStation.map((b) => (
+            {visibleBikes.map((b) => (
               <li
                 key={b.id}
                 className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3"
@@ -108,7 +118,8 @@ export function StationPanel({
                   </span>
                   <div className="flex flex-col">
                     <span className="font-mono text-sm font-medium">{b.id}</span>
-                    <span className="text-xs text-muted-foreground">{b.model}</span>
+                    <span className="text-sm text-muted-foreground">{b.model}</span>
+                    <BikeFrameBadge frameType={b.frameType} />
                   </div>
                 </div>
                 {role === "student" && b.status === "available" && (

@@ -5,6 +5,7 @@ import * as React from "react"
 import useSWR from "swr"
 import { STATION_DEFS } from "./campus"
 import { CURRENT_ADMIN, CURRENT_STUDENT, seedData } from "./data"
+import { getFrameAvailability, isBikeFrameType } from "./bike-frames"
 import { isSupabaseConfigured } from "./supabase/config"
 import { createIssueInDb, fetchIssuesFromDb, updateIssueStatusInDb } from "./issues-db"
 import {
@@ -44,6 +45,9 @@ export interface SessionUser {
 }
 
 export interface StationStats extends Station {
+  stepThroughAvailable: number
+  stepOverAvailable: number
+  unclassifiedAvailable: number
   available: number
   occupied: number
   inUse: number
@@ -246,6 +250,7 @@ export function StoreProvider({
       const utilization = def.capacity > 0 ? Math.round((occupied / def.capacity) * 100) : 0
       return {
         ...def,
+        ...getFrameAvailability(atStation, def.id),
         available,
         occupied,
         inUse: 0,
@@ -407,6 +412,7 @@ export function StoreProvider({
         model: data.model ?? "NITT Cruiser",
         condition: data.condition ?? 100,
         ...data,
+        frameType: isBikeFrameType(data.frameType) ? data.frameType : "unclassified",
         id,
       }
 

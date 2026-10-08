@@ -3,7 +3,7 @@
 import { useState, type ChangeEvent, type FormEvent } from "react"
 import { ClipboardCheckIcon, DownloadIcon, FileJsonIcon } from "lucide-react"
 import { toast } from "sonner"
-import { DONATION_CONDITIONS, DONATION_OUTCOMES, DONOR_YEARS, MAX_DONATION_FILE_BYTES, downloadDonationDocument, parseDonationDraft, validateAssessment, type DonationAssessment, type DonationDraft } from "@/lib/donations"
+import { DONATION_CONDITIONS, DONATION_OUTCOMES, DONOR_YEARS, MAX_DONATION_FILE_BYTES, downloadDonationDocument, downloadOwnershipProof, parseDonationDraft, validateAssessment, type DonationAssessment, type DonationDraft } from "@/lib/donations"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DonationDraftNotice } from "./donation-guidance"
 
-const INITIAL_ASSESSMENT: DonationAssessment = { outcome: "repair", notes: "", received: false, safetyChecked: false }
+const INITIAL_ASSESSMENT: DonationAssessment = { outcome: "repair", notes: "", received: false, safetyChecked: false, ownershipVerified: false, ownershipNotes: "" }
 
 export function AdminDonationsView() {
   const [draft, setDraft] = useState<DonationDraft | null>(null)
@@ -41,7 +41,7 @@ export function AdminDonationsView() {
     setReviewError("")
     setExported(false)
     try {
-      if (file.size > MAX_DONATION_FILE_BYTES) throw new Error("Choose a donation draft smaller than 64 KB.")
+      if (file.size > MAX_DONATION_FILE_BYTES) throw new Error("Choose a donation draft up to 3 MB, including ownership proof.")
       setDraft(parseDonationDraft(await file.text()))
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Could not open the draft. Please try again.")
@@ -53,12 +53,12 @@ export function AdminDonationsView() {
   function exportAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!draft) return
-    const error = validateAssessment(assessment)
+    const error = validateAssessment(assessment, draft.ownershipProof)
     if (error) { setReviewError(error); return }
     try {
       downloadDonationDocument({
-        kind: "cyclenet-donation-assessment", version: 1, assessedAt: new Date().toISOString(),
-        draft, assessment: { ...assessment, notes: assessment.notes.trim() },
+        kind: "cyclenet-donation-assessment", version: 2, assessedAt: new Date().toISOString(),
+        draft, assessment: { ...assessment, notes: assessment.notes.trim(), ownershipNotes: assessment.ownershipNotes.trim() },
         fleetRegistrationCompleted: false,
       }, "cyclenet-donation-assessment.json")
       setExported(true)
@@ -80,7 +80,7 @@ export function AdminDonationsView() {
           <Field data-invalid={Boolean(importError)}>
             <FieldLabel htmlFor="donation-file">Student donation draft</FieldLabel>
             <Input id="donation-file" type="file" accept=".json,application/json" disabled={reading} onChange={openDraft} aria-invalid={Boolean(importError)} aria-describedby={importError ? "donation-file-error" : "donation-file-help"} />
-            <FieldDescription id="donation-file-help">JSON only, up to 64 KB. Read on this device, not uploaded. Contact details in imported files are not verified account identities.</FieldDescription>
+            <FieldDescription id="donation-file-help">JSON only, up to 3 MB including the ownership document. Read on this device, not uploaded. Imported names and contact details do not verify the student&apos;s identity.</FieldDescription>
             {importError && <FieldError id="donation-file-error">{importError}</FieldError>}
             {reading && <p role="status" className="text-sm text-muted-foreground">Opening draft…</p>}
           </Field>
@@ -124,10 +124,26 @@ export function AdminDonationsView() {
                     </FieldGroup>
                   </FieldSet>
                   <FieldSet>
+                    <FieldLegend variant="label">Ownership verification — required before acceptance</FieldLegend>
+                    <FieldDescription>Download and inspect the attached document. Match the student ID to the owner and the bicycle to its model and frame number where available. If names differ, check evidence of the ownership transfer. Do not recommend acceptance while ownership is uncertain.</FieldDescription>
+                    <Field orientation="horizontal" data-disabled={!draft.ownershipProof}>
+                      <input id="donation-ownership-verified" type="checkbox" disabled={!draft.ownershipProof} checked={assessment.ownershipVerified} onChange={(event) => change("ownershipVerified", event.target.checked)} className="mt-1 size-4 shrink-0 accent-primary" aria-describedby="donation-ownership-review-help" />
+                      <FieldContent>
+                        <FieldLabel htmlFor="donation-ownership-verified">I checked the document, student identity and bicycle; ownership is verified.</FieldLabel>
+                        <FieldDescription id="donation-ownership-review-help">Required for fleet, repair and spare-parts recommendations. A file attachment or self-declaration alone is not verification.</FieldDescription>
+                      </FieldContent>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="donation-ownership-notes">Ownership verification notes</FieldLabel>
+                      <Textarea id="donation-ownership-notes" maxLength={1000} rows={3} value={assessment.ownershipNotes} onChange={(event) => change("ownershipNotes", event.target.value)} placeholder="Record the evidence checked, student identity match, bicycle identifiers, and any ownership transfer." />
+                      <FieldDescription>Required unless declining. Record findings, not copies of student-ID or payment numbers.</FieldDescription>
+                    </Field>
+                  </FieldSet>
+                  <FieldSet>
                     <FieldLegend variant="label">Handover & safety checks</FieldLegend>
                     <Field orientation="horizontal">
                       <input id="donation-received" type="checkbox" checked={assessment.received} onChange={(event) => change("received", event.target.checked)} className="size-4 shrink-0 accent-primary" />
-                      <FieldLabel htmlFor="donation-received">Cycle physically received; ownership verified</FieldLabel>
+                      <FieldLabel htmlFor="donation-received">Cycle physically received</FieldLabel>
                     </Field>
                     <Field orientation="horizontal">
                       <input id="donation-safety" type="checkbox" checked={assessment.safetyChecked} onChange={(event) => change("safetyChecked", event.target.checked)} className="size-4 shrink-0 accent-primary" />
@@ -178,9 +194,22 @@ function DonationDetailsCard({ draft }: { draft: DonationDraft }) {
         </dl>
         <Alert>
           <ClipboardCheckIcon />
-          <AlertTitle>Ownership declared, not verified</AlertTitle>
-          <AlertDescription>The donor confirmed ownership in their draft. Confirm this separately at handover.</AlertDescription>
+          <AlertTitle>{draft.ownershipProof ? "Document attached — not yet verified" : "Ownership proof missing — do not accept"}</AlertTitle>
+          <AlertDescription>{draft.ownershipProof ? "Check the document against the student and physical bicycle. Imported documents can be altered; an attachment is not a guarantee of authenticity." : "This older draft contains only an ownership declaration. Ask the student to download a new draft with proof. Acceptance recommendations are blocked."}</AlertDescription>
         </Alert>
+        {draft.ownershipProof && (
+          <div className="flex min-w-0 flex-col gap-3">
+            <dl className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1"><dt className="text-sm text-muted-foreground">Ownership document</dt><dd className="break-words text-sm">{draft.ownershipProof.filename}</dd></div>
+              <div className="flex flex-col gap-1"><dt className="text-sm text-muted-foreground">Owner / purchaser name (self-reported)</dt><dd className="break-words text-sm">{draft.ownershipProof.ownerName}</dd></div>
+              {draft.ownershipProof.explanation && <div className="flex flex-col gap-1"><dt className="text-sm text-muted-foreground">Ownership explanation</dt><dd className="whitespace-pre-wrap break-words text-sm leading-relaxed">{draft.ownershipProof.explanation}</dd></div>}
+            </dl>
+            <Button type="button" variant="outline" onClick={() => {
+              try { downloadOwnershipProof(draft.ownershipProof!) } catch { toast.error("Could not download the ownership document.") }
+            }}><DownloadIcon data-icon="inline-start" />Download ownership document</Button>
+            <p className="text-sm leading-relaxed text-muted-foreground">Contains personal information. Use a trusted document viewer; files are not malware-scanned or automatically authenticated.</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

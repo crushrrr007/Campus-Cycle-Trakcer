@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react"
 import { DownloadIcon, HeartHandshakeIcon } from "lucide-react"
 import { toast } from "sonner"
-import { createDonationDraft, DONATION_CONDITIONS, DONOR_YEARS, downloadDonationDocument, validateDonation, type DonationDetails, type DonationErrors } from "@/lib/donations"
+import { createDonationDraft, DONATION_CONDITIONS, DONOR_YEARS, downloadDonationDocument, validateDonation, validateOwnershipProof, type DonationDetails, type DonationErrors, type DonationOwnershipProof } from "@/lib/donations"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DonationDraftNotice, DonationGuidance } from "./donation-guidance"
 import { DonationSelect } from "./donation-select"
+import { OwnershipProofField } from "./ownership-proof-field"
 
 export function StudentDonationView({ donor }: { donor: { name: string; email: string; department: string } }) {
   const [details, setDetails] = useState<DonationDetails>({
@@ -21,6 +22,9 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
   })
   const [errors, setErrors] = useState<DonationErrors>({})
   const [downloaded, setDownloaded] = useState(false)
+  const [proof, setProof] = useState<DonationOwnershipProof | null>(null)
+  const [proofError, setProofError] = useState("")
+  const [readingProof, setReadingProof] = useState(false)
 
   function change<K extends keyof DonationDetails>(key: K, value: DonationDetails[K]) {
     setDetails((previous) => ({ ...previous, [key]: value }))
@@ -30,14 +34,17 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
 
   function download(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (readingProof) return
     const validation = validateDonation(details)
+    const ownershipError = validateOwnershipProof(proof)
     setErrors(validation)
-    if (Object.keys(validation).length) {
+    setProofError(ownershipError ?? "")
+    if (Object.keys(validation).length || ownershipError) {
       toast.error("Check the highlighted donation details.")
       return
     }
     try {
-      downloadDonationDocument(createDonationDraft(details), "cyclenet-donation-draft.json")
+      downloadDonationDocument(createDonationDraft(details, proof), "cyclenet-donation-draft.json")
       setDownloaded(true)
       toast.success("Draft downloaded. Share it with the transport team; it has not been submitted online.")
     } catch {
@@ -97,6 +104,7 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
                     {errors.knownIssues && <FieldError id="donation-issues-error">{errors.knownIssues}</FieldError>}
                   </Field>
                 </FieldSet>
+                <OwnershipProofField proof={proof} error={proofError} reading={readingProof} onReading={setReadingProof} onError={setProofError} onChange={(value) => { setProof(value); setProofError(""); setDownloaded(false) }} />
                 <FieldSet>
                   <FieldLegend>Proposed handover</FieldLegend>
                   <FieldDescription>The team must confirm these arrangements before you leave the cycle.</FieldDescription>
@@ -111,7 +119,7 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
                     <input id="donation-ownership" type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" checked={details.ownershipConfirmed} onChange={(event) => change("ownershipConfirmed", event.target.checked)} aria-invalid={Boolean(errors.ownershipConfirmed)} aria-describedby="donation-ownership-note" />
                     <FieldContent>
                       <FieldLabel htmlFor="donation-ownership">I own this cycle and am willing to donate it.</FieldLabel>
-                      <FieldDescription id="donation-ownership-note">This is not a borrowed campus cycle. The team may request proof of ownership before accepting it.</FieldDescription>
+                      <FieldDescription id="donation-ownership-note">This is not a borrowed campus cycle. My attached ownership document is genuine; the team must verify it before acceptance.</FieldDescription>
                       {errors.ownershipConfirmed && <FieldError>{errors.ownershipConfirmed}</FieldError>}
                     </FieldContent>
                   </Field>
@@ -120,10 +128,10 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
             </CardContent>
             <CardFooter className="flex flex-col items-stretch gap-3">
               <div className="flex flex-wrap gap-3">
-                <Button type="submit"><DownloadIcon data-icon="inline-start" />Download donation draft</Button>
+                <Button type="submit" disabled={readingProof}><DownloadIcon data-icon="inline-start" />Download donation draft</Button>
                 <Button type="button" variant="outline" disabled aria-describedby="donation-online-note">Submit online — unavailable</Button>
               </div>
-              <p id="donation-online-note" className="text-sm leading-relaxed text-muted-foreground">Online submissions and status tracking need donation storage. Your download contains contact details; share it only with the transport team.</p>
+              <p id="donation-online-note" className="text-sm leading-relaxed text-muted-foreground">Downloading does not submit a donation or create a tracked request. Share the downloaded file directly with the transport team; it contains your contact details and ownership document. Online submission and status updates are not enabled.</p>
               {downloaded && <p role="status" className="text-sm text-primary">Draft downloaded — not submitted. Keep the file and contact the team to arrange handover.</p>}
             </CardFooter>
           </Card>

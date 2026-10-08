@@ -12,7 +12,7 @@ export function DonationDraftNotice({ admin = false }: { admin?: boolean }) {
       <AlertDescription>
         {admin
           ? "Open a student’s downloaded draft and export your assessment. Files stay on your device; this does not save a review, notify the student, or change the fleet."
-          : "Prepare and download your details to share with the transport team. Nothing is submitted online or saved in your account. Keep the file before leaving this page."}
+          : "Attach ownership proof and download your details to share directly with the transport team. Nothing is sent to an admin or saved in your account. Download the file before leaving this page."}
       </AlertDescription>
     </Alert>
   )
@@ -48,7 +48,8 @@ export function DonationGuidance() {
           <h3 className="text-sm font-medium">Before you hand it over</h3>
           <ul className="flex list-disc flex-col gap-2 pl-4 text-sm leading-relaxed text-muted-foreground">
             <li>Describe the condition honestly, including known faults.</li>
-            <li>Keep ownership proof and a clear photo ready for the team.</li>
+            <li>Attach an invoice, receipt, or ownership-transfer document. Bring the original and your student ID for verification.</li>
+            <li>If the document is in someone else&apos;s name, provide evidence of the transfer to you. Ask the team about alternatives if you have no receipt.</li>
             <li>Agree on a handover time; do not leave a cycle unattended at a station.</li>
           </ul>
         </div>

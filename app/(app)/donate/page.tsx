@@ -6,7 +6,7 @@ import { StudentDonationView } from "@/components/donations/student-donation-vie
 
 export const metadata: Metadata = {
   title: "Donate a Cycle · CycleNet",
-  description: "Give your personally owned bicycle a second life at NIT Trichy. Prepare a donation draft for the campus transport team.",
+  description: "Give your personally owned bicycle a second life at NIT Trichy. Submit a donation with ownership proof and track the campus transport team’s assessment.",
 }
 
 export default async function DonatePage() {

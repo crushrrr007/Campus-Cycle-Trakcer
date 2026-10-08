@@ -8,11 +8,11 @@ export function DonationDraftNotice({ admin = false }: { admin?: boolean }) {
   return (
     <Alert>
       <InfoIcon />
-      <AlertTitle>Draft-only mode</AlertTitle>
+      <AlertTitle>Online donations enabled</AlertTitle>
       <AlertDescription>
         {admin
-          ? "Open a student’s downloaded draft and export your assessment. Files stay on your device; this does not save a review, notify the student, or change the fleet."
-          : "Attach ownership proof and download your details to share directly with the transport team. Nothing is sent to an admin or saved in your account. Download the file before leaving this page."}
+          ? "Open a submitted request to verify ownership and save your assessment. Students can see saved outcomes in their account. Imported backup files remain offline; neither a review nor a download registers a cycle in the fleet."
+          : "Attach ownership proof and submit your request to the transport team. Your request and document are accessible only to you and campus admins. Downloading a backup alone does not submit a request."}
       </AlertDescription>
     </Alert>
   )

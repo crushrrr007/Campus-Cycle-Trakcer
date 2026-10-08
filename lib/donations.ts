@@ -65,6 +65,23 @@ export interface DonationAssessment {
   ownershipNotes: string
 }
 
+export interface DonationRecord {
+  id: string
+  createdAt: string
+  reviewedAt: string | null
+  details: DonationDetails
+  assessment: DonationAssessment | null
+}
+
+export interface DonationList {
+  donations: DonationRecord[]
+  hasMore: boolean
+}
+
+export function donationStatus(assessment: DonationAssessment | null): string {
+  return assessment ? DONATION_OUTCOMES.find((item) => item.value === assessment.outcome)?.label ?? "Reviewed" : "Awaiting assessment"
+}
+
 export type DonationErrors = Partial<Record<keyof DonationDetails, string>>
 export const MAX_OWNERSHIP_PROOF_BYTES = 2 * 1024 * 1024
 export const MAX_DONATION_FILE_BYTES = 3 * 1024 * 1024

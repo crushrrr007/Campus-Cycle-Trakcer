@@ -199,12 +199,69 @@
   }
 }
 
-/* OpenStreetMap tiles stay light even when the surrounding app is dark. */
+/* Public OSM tiles need no key. Filter only the tiles, never controls or pins. */
 .cyclenet-map {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.01 250);
-  --muted-foreground: oklch(0.52 0.01 250);
-  --border: oklch(0.9 0.005 250);
+  isolation: isolate;
+}
+
+.campus-map-viewport,
+.campus-station-sidebar {
+  height: clamp(32rem, 66dvh, 48rem);
+}
+
+.cyclenet-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: 600 14px/1.4 var(--font-sans);
+  box-shadow: 0 2px 6px var(--border);
+}
+.cyclenet-marker.unavailable .cyclenet-pin {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.cyclenet-marker.offline .cyclenet-pin,
+.cyclenet-marker.uncertain .cyclenet-pin {
+  background: var(--card);
+  color: var(--muted-foreground);
+  border: 2px dashed var(--muted-foreground);
+}
+.cyclenet-marker.selected .cyclenet-pin,
+.cyclenet-marker:focus-visible .cyclenet-pin {
+  outline: 3px solid var(--foreground);
+  outline-offset: 3px;
+}
+.cyclenet-map .leaflet-control-zoom a {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-color: var(--border);
+}
+.cyclenet-map .leaflet-control-attribution {
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.cyclenet-map .leaflet-control-attribution a {
+  color: var(--card-foreground);
+}
+
+@media (max-width: 767px) {
+  .campus-map-viewport { height: clamp(24rem, 60dvh, 40rem); }
+  .campus-station-sheet {
+    position: absolute;
+    bottom: 2rem;
+    inset-inline: 0.5rem;
+    z-index: 1000;
+    max-height: 65%;
+    box-shadow: 0 -4px 20px var(--border);
+  }
+  .campus-station-sheet.is-expanded { max-height: 85%; }
 }
 
 /* Style station pins */
@@ -236,14 +293,13 @@
   padding: 12px;
 }
 
-/* Always-on station name labels on the live map.
-   Clean, minimal style: no box or border, just small text with a white halo
-   so it stays legible directly on the light map tiles. */
+/* Station labels appear on hover, selection, or at closer zoom levels. */
 .leaflet-tooltip.cyclenet-tooltip {
-  background: transparent;
-  border: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
   box-shadow: none;
-  padding: 0;
+  padding: 3px 6px;
   margin-top: -2px;
   color: var(--card-foreground);
   font-size: 14px;
@@ -260,8 +316,7 @@
   display: none;
 }
 
-/* Detail popup shown when a station pin is clicked. Pinned to light colors so
-   the map surface always reads as light mode regardless of the app theme. */
+/* Detail popups use the same theme as map controls. */
 .leaflet-popup.leaflet-popup .leaflet-popup-content-wrapper {
   background: var(--card);
   color: var(--card-foreground);

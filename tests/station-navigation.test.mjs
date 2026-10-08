@@ -13,6 +13,7 @@ function loadModule(path, require = () => { throw new Error("Unexpected import")
   return exports
 }
 const nav = loadModule("../lib/station-navigation.ts")
+const search = loadModule("../lib/campus-search.ts")
 const analytics = loadModule("../lib/analytics.ts")
 const origin = { lat: 10.76, lng: 78.81 }
 const station = (id, fields = {}) => ({ ...origin, id, name: id, shortName: id, capacity: 10, occupied: 3, available: 2, stepThroughAvailable: 0, status: "active", ...fields })
@@ -68,6 +69,33 @@ test("directions contain coordinates, explicit walking mode, and the chosen orig
   assert.equal(url.searchParams.get("travelmode"), "walking")
   assert.equal(url.searchParams.get("destination"), "10.76,78.81")
   assert.equal(new URL(nav.directionsUrl(station("A"))).searchParams.has("origin"), false)
+})
+
+test("purpose-aware marker counts distinguish free docks, verified frames, full and offline", () => {
+  const s = station("A", { occupied: 9, available: 7, stepThroughAvailable: 2 })
+  assert.equal(nav.stationAvailability(s, "borrow").count, 7)
+  assert.equal(nav.stationAvailability(s, "borrow", true).count, 2)
+  assert.equal(nav.stationAvailability(s, "return", true).count, 1)
+  assert.equal(nav.stationAvailability(station("full", { occupied: 10 }), "return").reason, "Full")
+  assert.equal(nav.stationAvailability(station("closed", { capacity: 0 }), "borrow").state, "offline")
+  assert.equal(nav.stationAvailability(station("empty", { available: 0 }), "borrow").state, "unavailable")
+})
+
+test("availability becomes stale only after sixty seconds since a successful update", () => {
+  assert.equal(nav.availabilityIsStale(null, 100000), true)
+  assert.equal(nav.availabilityIsStale(10000, 70000), false)
+  assert.equal(nav.availabilityIsStale(10000, 70001), true)
+})
+
+test("campus landmark search identifies area stations without inventing building coordinates", () => {
+  const stations = [station("STN-GARNET", { name: "Garnet Station" }), station("STN-CSE", { name: "Department Station", zone: "Academic" })]
+  const before = plain(stations)
+  assert.equal(search.searchCampusStations(stations, "KAILASH mess")[0].landmark, "Kailash Mess")
+  assert.equal(search.searchCampusStations(stations, "computer science")[0].station.id, "STN-CSE")
+  assert.equal(search.searchCampusStations(stations, "Garnet")[0].landmark, null)
+  assert.equal(search.searchCampusStations(stations, "unknown landmark").length, 0)
+  assert.equal(search.searchCampusStations(stations, "   ").length, 2)
+  assert.deepEqual(plain(stations), before)
 })
 
 test("campus day changes at 18:30 UTC rather than UTC midnight", () => {

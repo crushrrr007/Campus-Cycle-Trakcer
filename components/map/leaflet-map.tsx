@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet"
-import { useTheme } from "next-themes"
 import L from "leaflet"
 import type { StationStats } from "@/lib/store"
 import type { InteractiveMapProps } from "./interactive-map"
 import { stationAvailability, validCoordinates, type StationPurpose } from "@/lib/station-navigation"
+import { getStationHealthColor } from "@/lib/station-health"
 import "leaflet/dist/leaflet.css"
 
 /**
@@ -52,12 +52,12 @@ if (typeof window !== "undefined") {
 
 const CAMPUS_CENTER: [number, number] = [10.7606, 78.8155]
 
-function buildIcon(station: StationStats, selected: boolean, purpose: StationPurpose, lowFrameOnly: boolean, uncertain: boolean) {
+function buildIcon(station: StationStats, selected: boolean, purpose: StationPurpose, lowFrameOnly: boolean, uncertain: boolean, editable = false) {
   const info = stationAvailability(station, purpose, lowFrameOnly)
-  const symbol = uncertain ? "?" : info.state === "offline" ? "×" : info.count
+  const symbol = uncertain ? "?" : info.state === "offline" ? "×" : editable ? station.available : info.count
   return L.divIcon({
     className: `cyclenet-marker ${uncertain ? "uncertain" : info.state}${selected ? " selected" : ""}`,
-    html: `<span class="cyclenet-pin">${symbol}</span>`,
+    html: `<span class="cyclenet-pin"${editable && !uncertain ? ` style="background:${getStationHealthColor(station.available, station.capacity)};color:var(--background)"` : ""}>${symbol}</span>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
     tooltipAnchor: [0, -24],
@@ -66,7 +66,7 @@ function buildIcon(station: StationStats, selected: boolean, purpose: StationPur
 
 function MapController({ stations, selectedId, resetSignal = 0, locateSignal = 0, origin }: InteractiveMapProps) {
   const map = useMap()
-  const key = stations.map((station) => station.id).join(",")
+  const key = stations.map((station) => station.id).sort().join(",")
   useEffect(() => {
     map.invalidateSize({ animate: false })
     const points = stations.filter(validCoordinates).map((station) => L.latLng(station.lat, station.lng))
@@ -105,11 +105,12 @@ function StationMarkers({ stations, selectedId, onSelect, editable, onMove, purp
   const map = useMap()
   const [zoom, setZoom] = useState(map.getZoom())
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
-  const markers = useMemo(() => stations.filter(validCoordinates).map((station) => ({ station, icon: buildIcon(station, station.id === selectedId, purpose, lowFrameOnly, availabilityUncertain) })), [stations, selectedId, purpose, lowFrameOnly, availabilityUncertain])
+  const markers = useMemo(() => stations.filter(validCoordinates).map((station) => ({ station, icon: buildIcon(station, station.id === selectedId, purpose, lowFrameOnly, availabilityUncertain, editable) })), [stations, selectedId, purpose, lowFrameOnly, availabilityUncertain, editable])
   return <>{markers.map(({ station, icon }) => {
     const info = stationAvailability(station, purpose, lowFrameOnly)
     const markerLabel = `${station.name}: ${availabilityUncertain ? "availability unconfirmed" : `${info.count} ${info.label}, ${info.reason}`}`
     return <Marker key={`${station.id}:${markerLabel}`} position={[station.lat, station.lng]} icon={icon} title={markerLabel} alt={markerLabel} draggable={editable} eventHandlers={{
+      add: (event) => { event.target.getElement()?.setAttribute("aria-label", markerLabel) },
       click: () => onSelect(station.id),
       dragend: (event) => { const { lat, lng } = event.target.getLatLng(); onMove?.(station.id, lat, lng) },
     }} zIndexOffset={station.id === selectedId ? 1000 : 0}>
@@ -121,14 +122,12 @@ function StationMarkers({ stations, selectedId, onSelect, editable, onMove, purp
 }
 
 export default function LeafletMap(props: InteractiveMapProps) {
-  const { resolvedTheme } = useTheme()
-  const layer = resolvedTheme === "dark" ? "dark_all" : "light_all"
   const { gpsLocation, origin, accuracy, onTileError, resetSignal = 0 } = props
   return <MapContainer className="cyclenet-map font-sans" center={CAMPUS_CENTER} zoom={16} scrollWheelZoom zoomControl={false}
     // Keep teardown-safe, non-animated camera updates during theme and HMR changes.
     zoomAnimation={false} markerZoomAnimation={false} style={{ height: "100%", width: "100%", background: "var(--muted)" }}>
     <ZoomControl position="topleft" />
-    <TileLayer key={`${layer}:${resetSignal}`} url={`https://{s}.basemaps.cartocdn.com/${layer}/{z}/{x}/{y}{r}.png`} attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'} subdomains="abcd" maxZoom={19} updateWhenIdle keepBuffer={2} crossOrigin="anonymous" eventHandlers={{ tileerror: () => onTileError?.() }} />
+    <TileLayer key={resetSignal} className="saturate-50 dark:invert dark:hue-rotate-180 dark:saturate-25 dark:brightness-75" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'} maxZoom={19} updateWhenIdle keepBuffer={2} crossOrigin="anonymous" eventHandlers={{ tileerror: () => onTileError?.() }} />
     <StationMarkers {...props} />
     {gpsLocation && validCoordinates(gpsLocation) && <>
       {accuracy !== null && accuracy !== undefined && Number.isFinite(accuracy) && accuracy > 0 && <Circle center={[gpsLocation.lat, gpsLocation.lng]} radius={Math.min(accuracy, 5000)} interactive={false} pathOptions={{ color: "var(--primary)", fillColor: "var(--primary)", fillOpacity: 0.08, weight: 1 }} />}

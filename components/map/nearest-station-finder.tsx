@@ -1,6 +1,8 @@
 "use client"
 
-import { LocateFixed, Search, X } from "lucide-react"
+import { useState } from "react"
+import { LocateFixed, Search, SlidersHorizontal, X } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
@@ -23,6 +25,7 @@ export function NearestStationFinder({ stations, purpose, onPurposeChange, query
   onLowFrameChange: () => void
   disabled: boolean
 }) {
+  const [optionsOpen, setOptionsOpen] = useState(false)
   const origins = [{ value: "none", label: "Choose starting station" }, ...(hasLocation ? [{ value: "gps", label: "My location" }] : []), ...stations.filter(validCoordinates).map((station) => ({ value: station.id, label: station.shortName }))]
   const purposes = [{ value: "borrow", label: "Borrow a bike" }, { value: "return", label: "Return a bike" }]
   return (
@@ -35,7 +38,7 @@ export function NearestStationFinder({ stations, purpose, onPurposeChange, query
             <SelectContent><SelectGroup>{purposes.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
           </Select>
         </Field>
-        <Field className="min-w-48 flex-1">
+        <Field className="order-last w-full min-w-48 flex-1 md:order-none md:w-auto">
           <FieldLabel className="sr-only" htmlFor="campus-search">Search campus</FieldLabel>
           <InputGroup className="h-10">
             <InputGroupInput id="campus-search" placeholder="Search hostels, departments, stations…" value={query} onChange={(event) => onQueryChange(event.target.value)} aria-controls="campus-station-results" />
@@ -45,7 +48,8 @@ export function NearestStationFinder({ stations, purpose, onPurposeChange, query
         </Field>
         <Button variant="outline" className="h-10" disabled={locating || disabled} onClick={onLocate}><LocateFixed data-icon="inline-start" />{locating ? "Locating…" : "Locate me"}</Button>
       </FieldGroup>
-      <FieldGroup className="flex-row flex-wrap items-center gap-3">
+      <Button variant="ghost" className="self-start md:hidden" aria-expanded={optionsOpen} aria-controls="campus-journey-options" onClick={() => setOptionsOpen((value) => !value)}><SlidersHorizontal data-icon />Journey options{lowFrameOnly ? " · Low-frame" : ""}</Button>
+      <FieldGroup id="campus-journey-options" className={cn("flex-row flex-wrap items-center gap-3 md:flex", !optionsOpen && "hidden")}>
         <Field orientation="horizontal" className="w-full sm:w-auto">
           <FieldLabel htmlFor="station-origin" className="shrink-0">From</FieldLabel>
           <Select value={originId || "none"} items={origins} disabled={disabled} onValueChange={(value) => { if (value) onOriginChange(value === "none" ? "" : value) }}>

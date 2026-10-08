@@ -8,6 +8,7 @@ import {
   MapPin,
   UserRound,
   Wrench,
+  HeartHandshake,
   type LucideIcon,
 } from "lucide-react"
 import type { UserRole } from "./types"
@@ -26,11 +27,13 @@ export const NAV_ITEMS: NavItem[] = [
   { title: "Scan & Ride", href: "/scan", icon: QrCode, roles: ["student"], group: "Personal" },
   { title: "My Rides", href: "/rides", icon: Route, roles: ["student"], group: "Personal" },
   { title: "Report Issue", href: "/report", icon: Wrench, roles: ["student"], group: "Personal" },
+  { title: "Donate a Cycle", href: "/donate", icon: HeartHandshake, roles: ["student"], group: "Personal" },
   { title: "Profile", href: "/profile", icon: UserRound, roles: ["student"], group: "Personal" },
   { title: "Bicycles", href: "/bikes", icon: Bike, roles: ["admin"], group: "Operations" },
   { title: "Stations", href: "/stations", icon: MapPin, roles: ["admin"], group: "Operations" },
   { title: "Ride History", href: "/rides", icon: Route, roles: ["admin"], group: "Operations" },
   { title: "Issues", href: "/issues", icon: Wrench, roles: ["admin"], group: "Operations" },
+  { title: "Donations", href: "/donations", icon: HeartHandshake, roles: ["admin"], group: "Operations" },
   { title: "Reports", href: "/reports", icon: FileBarChart, roles: ["admin"], group: "Operations" },
 ]
 

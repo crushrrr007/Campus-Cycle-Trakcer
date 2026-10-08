@@ -18,7 +18,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: 'CycleNet — Smart Campus Bicycle Tracking · NIT Trichy',
   description:
-    'A real-time smart campus bicycle tracking and management platform for NIT Trichy. Borrow and return bikes via QR, track availability across stations, and explore live analytics.',
+    'A real-time smart campus bicycle tracking and management platform for NIT Trichy. Borrow and return bikes via QR, track availability across stations, explore live analytics, and prepare bicycle donation drafts for the campus transport team.',
   generator: 'v0.app',
 }
 

@@ -2,8 +2,8 @@
 
 import { useCallback, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
-import { fetchNotificationsFromDb, markPersonalNotificationsReadInDb } from "./notifications-db"
-import type { AppNotification } from "./types"
+import { fetchNotificationsFromDb, markPersonalNotificationsReadInDb } from "@/lib/notifications-db"
+import type { AppNotification } from "@/lib/types"
 
 export function useNotifications(realMode: boolean, userId: string | undefined, seed: AppNotification[]) {
   const [local, setLocal] = useState(() => realMode ? [] : seed)

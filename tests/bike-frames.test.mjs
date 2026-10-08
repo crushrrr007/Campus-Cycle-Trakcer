@@ -73,7 +73,7 @@ test("demo fleet has a deterministic 50/50 frame mix without changing other seed
   vm.runInNewContext(output, { exports, require: requireSeedModule })
   const withoutFrames = (data) => ({
     ...data,
-    bikes: data.bikes.map(({ frameType: _frameType, ...bike }) => bike),
+    bikes: data.bikes.map((bike) => Object.fromEntries(Object.entries(bike).filter(([key]) => key !== "frameType"))),
   })
   assert.equal(JSON.stringify(withoutFrames(seeded)), JSON.stringify(withoutFrames(exports.seedData())))
 })
@@ -156,19 +156,20 @@ test("frame edits retain admin-only RLS and detect filtered-out writes", async (
   assert.equal((await filtered.updateBikeInDb("NITT-0001", { frameType: "step-through" })).ok, false)
 })
 
-function mapModule() {
+function mapModule(zoom = 16) {
   const health = loadModule("../lib/station-health.ts")
+  const navigation = loadModule("../lib/station-navigation.ts")
   const Container = ({ children, className }) => jsxRuntime.jsx("div", { className, children })
-  const Marker = ({ title, children }) => jsxRuntime.jsx("div", { "aria-label": title, children })
+  const Marker = ({ title, icon, children }) => jsxRuntime.jsx("div", { "aria-label": title, "data-pin-count": icon.html.match(/>([^<]*)<\/span>/)[1], children })
   const Tooltip = ({ permanent, children }) => jsxRuntime.jsx("div", { "data-permanent": permanent, children })
-  const Popup = ({ children }) => jsxRuntime.jsx("div", { "data-map-popup": true, children })
   return loadModule("../components/map/leaflet-map.tsx", (name) => {
     if (name === "react/jsx-runtime") return jsxRuntime
-    if (name === "react") return { useMemo: (factory) => factory(), useEffect: () => {} }
-    if (name === "react-leaflet") return { MapContainer: Container, Marker, Tooltip, Popup, TileLayer: () => null, ZoomControl: () => null, useMap: () => ({}) }
+    if (name === "react") return { useMemo: (factory) => factory(), useEffect: () => {}, useState: (value) => [value, () => {}] }
+    if (name === "react-leaflet") return { MapContainer: Container, Marker, Tooltip, TileLayer: () => null, ZoomControl: () => null, useMap: () => ({ getZoom: () => zoom }), useMapEvents: () => {} }
     if (name === "leaflet") return { default: { divIcon: (options) => options } }
     if (name === "leaflet/dist/leaflet.css") return {}
     if (name === "@/lib/station-health") return health
+    if (name === "@/lib/station-navigation") return navigation
     throw new Error(`Unexpected map import: ${name}`)
   }).default
 }
@@ -178,41 +179,54 @@ const mapStation = {
   capacity: 12, occupied: 9, available: 7, stepThroughAvailable: 3, stepOverAvailable: 4, unclassifiedAvailable: 0,
 }
 
-function renderMap(station) {
-  const Map = mapModule()
-  return renderToStaticMarkup(Map({ stations: [station], selectedId: null, onSelect: () => {} }))
+function renderMap(station, props = {}, zoom = 16) {
+  const Map = mapModule(zoom)
+  return renderToStaticMarkup(Map({ stations: [station], selectedId: null, onSelect: () => {}, ...props }))
 }
 
-test("permanent map labels show only station names while popups retain frame counts", () => {
-  const markup = renderMap(mapStation)
-  assert.match(markup, /data-permanent="true"><span[^>]*>Library<\/span><\/div>/)
-  assert.doesNotMatch(markup, /3 low .*4 high/)
-  assert.match(markup, /Low-frame<\/dt><dd[^>]*>3<\/dd>/)
-  assert.match(markup, /High-frame<\/dt><dd[^>]*>4<\/dd>/)
-  assert.match(markup, /Main Library: 7 available, 3 low-frame, 4 high-frame, 0 awaiting frame inspection/)
-  assert.match(markup, /Free docks<\/dt><dd[^>]*>3<\/dd>/)
-  assert.doesNotMatch(markup, /Unclassified<\/dt>/)
+test("station labels stay quiet at campus zoom and become permanent when selected or zoomed in", () => {
+  assert.match(renderMap(mapStation), /data-permanent="false"><span>Library<\/span>/)
+  assert.match(renderMap(mapStation, { selectedId: "A" }), /data-permanent="true"><span>Library<\/span>/)
+  assert.match(renderMap(mapStation, {}, 17), /data-permanent="true"><span>Library<\/span>/)
+  assert.match(renderMap(mapStation), /Main Library: 7 bikes available, Usable/)
 })
 
-test("map popups do not treat unclassified bikes as low or high", () => {
-  const markup = renderMap({ ...mapStation, available: 2, occupied: 2, stepThroughAvailable: 0, stepOverAvailable: 0, unclassifiedAvailable: 2 })
-  assert.match(markup, /Low-frame<\/dt><dd[^>]*>0<\/dd>/)
-  assert.match(markup, /High-frame<\/dt><dd[^>]*>0<\/dd>/)
-  assert.match(markup, /Unclassified<\/dt><dd[^>]*>2<\/dd>/)
-  assert.match(markup, /0 low-frame, 0 high-frame, 2 awaiting frame inspection/)
+test("map low-frame mode never treats unclassified bikes as verified stock", () => {
+  const station = { ...mapStation, available: 2, occupied: 2, stepThroughAvailable: 0, stepOverAvailable: 0, unclassifiedAvailable: 2 }
+  const markup = renderMap(station, { lowFrameOnly: true })
+  assert.match(markup, /data-pin-count="0"/)
+  assert.match(markup, /Main Library: 0 low-frame bikes, No low-frame bikes/)
+  const { StationFrameAvailability } = loadUI("../components/bike-frame-info.tsx")
+  const details = renderToStaticMarkup(jsxRuntime.jsx(StationFrameAvailability, { station, admin: true }))
+  assert.match(details, /2 available bikes awaiting frame inspection/)
 })
 
 test("map frame counts reflect borrowing, returning and maintenance status", () => {
   const fleet = [bike("step-through"), bike("step-over"), bike("step-through", "A", "maintenance")]
-  const renderFleet = () => renderMap({ ...mapStation, ...count(fleet, "A") })
-  const assertPopupCounts = (low, high) => {
-    const markup = renderFleet()
-    assert.match(markup, new RegExp(`Low-frame<\\/dt><dd[^>]*>${low}<\\/dd>`))
-    assert.match(markup, new RegExp(`High-frame<\\/dt><dd[^>]*>${high}<\\/dd>`))
+  const assertLowFrameCount = (low, high) => {
+    const station = { ...mapStation, ...count(fleet, "A") }
+    assert.match(renderMap(station, { lowFrameOnly: true }), new RegExp(`data-pin-count="${low}"`))
+    const { StationFrameAvailability } = loadUI("../components/bike-frame-info.tsx")
+    const details = renderToStaticMarkup(jsxRuntime.jsx(StationFrameAvailability, { station }))
+    assert.match(details, new RegExp(`${low} low-frame`))
+    assert.match(details, new RegExp(`${high} high-frame`))
   }
-  assertPopupCounts(1, 1)
+  assertLowFrameCount(1, 1)
   fleet[0] = { ...fleet[0], status: "in-use", stationId: null }
-  assertPopupCounts(0, 1)
+  assertLowFrameCount(0, 1)
   fleet[0] = { ...fleet[0], status: "available", stationId: "A" }
-  assertPopupCounts(1, 1)
+  assertLowFrameCount(1, 1)
+})
+
+test("return pins count free docks regardless of the low-frame pickup filter", () => {
+  const markup = renderMap(mapStation, { purpose: "return", lowFrameOnly: true })
+  assert.match(markup, /data-pin-count="3"/)
+  assert.match(markup, /Main Library: 3 free docks, Usable/)
+})
+
+test("unconfirmed map availability renders an unknown pin instead of a trusted count", () => {
+  const markup = renderMap(mapStation, { availabilityUncertain: true })
+  assert.match(markup, /data-pin-count="\?"/)
+  assert.match(markup, /Main Library: availability unconfirmed/)
+  assert.doesNotMatch(markup, /Main Library: 7 bikes available/)
 })

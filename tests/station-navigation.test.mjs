@@ -153,7 +153,7 @@ function storeWithRpc(borrowRpc, returnRpc = async () => ({ ok: true, message: "
     if (name === "./data") return { seedData: () => ({ bikes: [], rides: [], notifications: [] }) }
     if (name === "./bike-frames") return { getFrameAvailability: () => ({}), isBikeFrameType: () => true }
     if (name === "./supabase/config") return { isSupabaseConfigured: true }
-    if (name === "./use-notifications") return { useNotifications: () => ({ notifications: [], pushNotification: noop, markAllRead: noop, refreshNotifications: noop }) }
+    if (name === "@/hooks/use-notifications") return { useNotifications: () => ({ notifications: [], pushNotification: noop, markAllRead: noop, refreshNotifications: noop }) }
     if (name === "./rides-db") return { borrowBikeInDb: borrowRpc, returnBikeInDb: returnRpc }
     if (["./bikes-db", "./stations-db", "./issues-db"].includes(name)) return {}
     throw new Error(`Unexpected import ${name}`)

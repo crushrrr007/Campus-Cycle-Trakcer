@@ -7,7 +7,7 @@ import { STATION_DEFS } from "./campus"
 import { CURRENT_ADMIN, CURRENT_STUDENT, seedData } from "./data"
 import { getFrameAvailability, isBikeFrameType } from "./bike-frames"
 import { isSupabaseConfigured } from "./supabase/config"
-import { useNotifications } from "./use-notifications"
+import { useNotifications } from "@/hooks/use-notifications"
 import { createIssueInDb, fetchIssuesFromDb, updateIssueStatusInDb } from "./issues-db"
 import {
   createStationInDb,

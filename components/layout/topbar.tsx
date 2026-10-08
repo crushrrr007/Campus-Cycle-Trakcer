@@ -17,10 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { GlobalSearch } from "@/components/global-search"
-import { NotificationsMenu } from "@/components/notifications-menu"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { RoleSwitch } from "@/components/role-switch"
+import { GlobalSearch } from "./global-search"
+import { NotificationsMenu } from "./notifications-menu"
+import { ThemeToggle } from "./theme-toggle"
+import { RoleSwitch } from "./role-switch"
 import { useStore } from "@/lib/store"
 
 export function Topbar() {

@@ -1,7 +1,9 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
-import { DownloadIcon, HeartHandshakeIcon } from "lucide-react"
+import { useRef, useState, type FormEvent } from "react"
+import { useSWRConfig } from "swr"
+import { DownloadIcon, HeartHandshakeIcon, SendIcon } from "lucide-react"
+import { donationRequest, isDonationListKey } from "@/lib/donation-client"
 import { toast } from "sonner"
 import { createDonationDraft, DONATION_CONDITIONS, DONOR_YEARS, downloadDonationDocument, validateDonation, validateOwnershipProof, type DonationDetails, type DonationErrors, type DonationOwnershipProof } from "@/lib/donations"
 import { Button } from "@/components/ui/button"
@@ -12,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { DonationDraftNotice, DonationGuidance } from "./donation-guidance"
 import { DonationSelect } from "./donation-select"
 import { OwnershipProofField } from "./ownership-proof-field"
+import { DonationInbox } from "./donation-inbox"
 
 export function StudentDonationView({ donor }: { donor: { name: string; email: string; department: string } }) {
   const [details, setDetails] = useState<DonationDetails>({
@@ -25,28 +28,68 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
   const [proof, setProof] = useState<DonationOwnershipProof | null>(null)
   const [proofError, setProofError] = useState("")
   const [readingProof, setReadingProof] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submittedId, setSubmittedId] = useState("")
+  const [submissionError, setSubmissionError] = useState("")
+  const pendingSubmission = useRef<{ id: string; fingerprint: string } | null>(null)
+  const submissionInFlight = useRef(false)
+  const { mutate } = useSWRConfig()
 
   function change<K extends keyof DonationDetails>(key: K, value: DonationDetails[K]) {
     setDetails((previous) => ({ ...previous, [key]: value }))
     setErrors((previous) => ({ ...previous, [key]: undefined }))
     setDownloaded(false)
+    setSubmittedId("")
+    setSubmissionError("")
   }
 
-  function download(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (readingProof) return
+  function validatedDraft() {
+    if (readingProof) return null
     const validation = validateDonation(details)
     const ownershipError = validateOwnershipProof(proof)
     setErrors(validation)
     setProofError(ownershipError ?? "")
     if (Object.keys(validation).length || ownershipError) {
       toast.error("Check the highlighted donation details.")
-      return
+      return null
     }
+    return createDonationDraft(details, proof)
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (submissionInFlight.current || submittedId) return
+    const draft = validatedDraft()
+    if (!draft) return
+    const fingerprint = JSON.stringify([draft.details, draft.ownershipProof])
+    if (pendingSubmission.current?.fingerprint !== fingerprint) pendingSubmission.current = { id: crypto.randomUUID(), fingerprint }
+    submissionInFlight.current = true
+    setSubmitting(true)
+    setSubmissionError("")
     try {
-      downloadDonationDocument(createDonationDraft(details, proof), "cyclenet-donation-draft.json")
+      const result = await donationRequest<{ id: string }>("/api/donations", {
+        method: "POST", body: JSON.stringify({ id: pendingSubmission.current.id, draft }),
+      })
+      setSubmittedId(result.id)
+      pendingSubmission.current = null
+      toast.success("Donation submitted. The transport team can now review your request.")
+      void mutate(isDonationListKey).catch(() => undefined)
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "Could not submit your donation. Keep this page open and try again.")
+    } finally {
+      submissionInFlight.current = false
+      setSubmitting(false)
+    }
+  }
+
+  function download() {
+    if (readingProof || submitting) return
+    const draft = validatedDraft()
+    if (!draft) return
+    try {
+      downloadDonationDocument(draft, "cyclenet-donation-draft.json")
       setDownloaded(true)
-      toast.success("Draft downloaded. Share it with the transport team; it has not been submitted online.")
+      toast.success("Backup downloaded. Downloading alone does not submit a donation.")
     } catch {
       toast.error("Could not download the draft. Please try again.")
     }
@@ -68,8 +111,10 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
   return (
     <div className="flex flex-col gap-5 font-sans">
       <DonationDraftNotice />
+      <DonationInbox />
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <form noValidate onSubmit={download} className="min-w-0">
+        <form noValidate onSubmit={submit} className="min-w-0" aria-busy={submitting}>
+          <fieldset disabled={submitting} className="min-w-0">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><HeartHandshakeIcon aria-hidden="true" />Your cycle, its next chapter</CardTitle>
@@ -79,7 +124,7 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
               <FieldGroup>
                 <FieldSet>
                   <FieldLegend>Student details</FieldLegend>
-                  <FieldDescription>Your registered account details identify this draft.</FieldDescription>
+                  <FieldDescription>Your registered account identifies this request. The team will verify ownership before acceptance.</FieldDescription>
                   <FieldGroup className="grid gap-4 sm:grid-cols-2">
                     {textField("donorName", "Name", { readOnly: true })}
                     {textField("donorEmail", "College email", { readOnly: true, type: "email", maxLength: 254 })}
@@ -104,7 +149,7 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
                     {errors.knownIssues && <FieldError id="donation-issues-error">{errors.knownIssues}</FieldError>}
                   </Field>
                 </FieldSet>
-                <OwnershipProofField proof={proof} error={proofError} reading={readingProof} onReading={setReadingProof} onError={setProofError} onChange={(value) => { setProof(value); setProofError(""); setDownloaded(false) }} />
+                <OwnershipProofField proof={proof} error={proofError} reading={readingProof} onReading={setReadingProof} onError={setProofError} onChange={(value) => { setProof(value); setProofError(""); setDownloaded(false); setSubmittedId(""); setSubmissionError("") }} />
                 <FieldSet>
                   <FieldLegend>Proposed handover</FieldLegend>
                   <FieldDescription>The team must confirm these arrangements before you leave the cycle.</FieldDescription>
@@ -128,13 +173,16 @@ export function StudentDonationView({ donor }: { donor: { name: string; email: s
             </CardContent>
             <CardFooter className="flex flex-col items-stretch gap-3">
               <div className="flex flex-wrap gap-3">
-                <Button type="submit" disabled={readingProof}><DownloadIcon data-icon="inline-start" />Download donation draft</Button>
-                <Button type="button" variant="outline" disabled aria-describedby="donation-online-note">Submit online — unavailable</Button>
+                <Button type="submit" disabled={readingProof || submitting || Boolean(submittedId)}><SendIcon data-icon="inline-start" />{submitting ? "Submitting…" : submittedId ? "Donation submitted" : "Submit donation"}</Button>
+                <Button type="button" variant="outline" disabled={readingProof || submitting} onClick={download}><DownloadIcon data-icon="inline-start" />Download backup</Button>
               </div>
-              <p id="donation-online-note" className="text-sm leading-relaxed text-muted-foreground">Downloading does not submit a donation or create a tracked request. Share the downloaded file directly with the transport team; it contains your contact details and ownership document. Online submission and status updates are not enabled.</p>
-              {downloaded && <p role="status" className="text-sm text-primary">Draft downloaded — not submitted. Keep the file and contact the team to arrange handover.</p>}
+              <p id="donation-online-note" className="text-sm leading-relaxed text-muted-foreground">Submitting saves your request and ownership document for admin review. Track the assessment above. A backup contains personal information; keep it private. Acceptance and handover must be confirmed by the team.</p>
+              {submissionError && <p role="alert" className="text-sm text-destructive">{submissionError}</p>}
+              {submittedId && <p role="status" className="break-all text-sm text-primary">Submitted for assessment. Reference: {submittedId}</p>}
+              {downloaded && <p role="status" className="text-sm text-muted-foreground">Backup downloaded. Downloading alone does not send a request to admins.</p>}
             </CardFooter>
           </Card>
+          </fieldset>
         </form>
         <DonationGuidance />
       </div>

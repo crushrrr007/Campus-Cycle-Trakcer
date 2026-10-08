@@ -4,7 +4,7 @@ import { AdminDonationsView } from "@/components/donations/admin-donations-view"
 
 export const metadata: Metadata = {
   title: "Donation Review · CycleNet",
-  description: "Review student bicycle donation drafts and assess cycles for fleet use, repairs, or spare parts at NIT Trichy.",
+  description: "Review submitted student bicycle donations, verify ownership, and save assessments for fleet use, repairs, or spare parts at NIT Trichy.",
 }
 
 export default function DonationsPage() {

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { isNittEmail, isSupabaseConfigured, SUPABASE_URL, SUPABASE_KEY, SUPABASE_COOKIE_OPTIONS } from "./config"
 
-const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/auth"]
+const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/forgot-password", "/auth"]
 
 export async function updateSession(request: NextRequest) {
   if (!isSupabaseConfigured) {

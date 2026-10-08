@@ -254,6 +254,11 @@ export function AuthForm({ mode, callbackFailed = false }: AuthFormProps) {
               </button>
             </div>
             {isSignUp && <p className="text-xs text-muted-foreground">At least 8 characters</p>}
+            {!isSignUp && (
+              <Link href="/forgot-password" className="self-end text-sm font-medium text-primary underline-offset-4 hover:underline">
+                Forgot password?
+              </Link>
+            )}
           </div>
 
           {error && (

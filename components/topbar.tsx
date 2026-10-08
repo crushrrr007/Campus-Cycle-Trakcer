@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LogOut, UserRound, Wrench } from "lucide-react"
+import { KeyRound, LogOut, UserRound, Wrench } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -93,6 +93,16 @@ export function Topbar() {
                   </Link>
                 }
               />
+              {!isDemo && (
+                <DropdownMenuItem
+                  render={
+                    <Link href="/change-password">
+                      <KeyRound />
+                      Change password
+                    </Link>
+                  }
+                />
+              )}
               <DropdownMenuItem
                 render={
                   <Link href="/report">

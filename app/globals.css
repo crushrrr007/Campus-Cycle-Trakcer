@@ -207,6 +207,35 @@
   --border: oklch(0.9 0.005 250);
 }
 
+/* Style station pins */
+.station-pin {
+  background-color: var(--primary);
+  border: 2px solid var(--primary-foreground);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.station-pin:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 12px var(--primary);
+}
+
+/* Style controls */
+.station-controls {
+  background-color: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
 /* Always-on station name labels on the live map.
    Clean, minimal style: no box or border, just small text with a white halo
    so it stays legible directly on the light map tiles. */

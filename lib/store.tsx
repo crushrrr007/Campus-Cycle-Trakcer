@@ -69,6 +69,9 @@ export interface ActionResult {
 interface StoreValue {
   dataLoading: boolean
   dataError: boolean
+  availabilityUpdatedAt: number | null
+  availabilityRefreshing: boolean
+  availabilityError: boolean
   refreshData: () => Promise<void>
   bikes: Bike[]
   rides: Ride[]
@@ -187,29 +190,33 @@ export function StoreProvider({
   )
   const issues = useMemo(() => realMode ? (dbIssues ?? []) : localIssues, [realMode, dbIssues, localIssues])
 
+  const [stationsUpdatedAt, setStationsUpdatedAt] = useState<number | null>(null)
+  const [bikesUpdatedAt, setBikesUpdatedAt] = useState<number | null>(null)
+  const [ridesUpdatedAt, setRidesUpdatedAt] = useState<number | null>(null)
+
   // Real mode reads only the connected project's stations.
-  const { data: dbStations, error: stationsError, isLoading: stationsLoading, mutate: mutateStations } = useSWR(
+  const { data: dbStations, error: stationsError, isLoading: stationsLoading, isValidating: stationsRefreshing, mutate: mutateStations } = useSWR(
     realMode ? ["db-stations", sessionUser?.id] : null,
     fetchStationsFromDb,
-    { revalidateOnFocus: true, refreshInterval: 15000 },
+    { revalidateOnFocus: true, refreshInterval: 15000, onSuccess: () => setStationsUpdatedAt(Date.now()) },
   )
   const stationDefs = useMemo(() => realMode ? (dbStations ?? []) : localStationDefs, [realMode, dbStations, localStationDefs])
 
   // Real mode: the bicycle fleet lives in Supabase. Borrow/return/move all
   // persist to the database and revalidate through SWR.
-  const { data: dbBikes, error: bikesError, isLoading: bikesLoading, mutate: mutateBikes } = useSWR(
+  const { data: dbBikes, error: bikesError, isLoading: bikesLoading, isValidating: bikesRefreshing, mutate: mutateBikes } = useSWR(
     realMode ? ["db-bikes", sessionUser?.id] : null,
     fetchBikesFromDb,
-    { revalidateOnFocus: true, refreshInterval: 15000 },
+    { revalidateOnFocus: true, refreshInterval: 15000, onSuccess: () => setBikesUpdatedAt(Date.now()) },
   )
   const bikes = useMemo(() => realMode ? (dbBikes ?? []) : localBikes, [realMode, dbBikes, localBikes])
 
   // Real mode: rides are persisted in Supabase. RLS scopes the result —
   // students only receive their own rides, admins receive everything.
-  const { data: dbRides, error: ridesError, isLoading: ridesLoading, mutate: mutateRides } = useSWR(
+  const { data: dbRides, error: ridesError, isLoading: ridesLoading, isValidating: ridesRefreshing, mutate: mutateRides } = useSWR(
     realMode ? ["db-rides", sessionUser?.id] : null,
     fetchRidesFromDb,
-    { revalidateOnFocus: true, refreshInterval: 15000 },
+    { revalidateOnFocus: true, refreshInterval: 15000, onSuccess: () => setRidesUpdatedAt(Date.now()) },
   )
   const rides = useMemo(() => realMode ? (dbRides ?? []) : localRides, [realMode, dbRides, localRides])
 
@@ -795,6 +802,9 @@ export function StoreProvider({
   const value: StoreValue = {
     dataLoading: realMode && Boolean(bikesLoading || ridesLoading || stationsLoading || issuesLoading),
     dataError: Boolean(bikesError || ridesError || stationsError || issuesError),
+    availabilityUpdatedAt: stationsUpdatedAt !== null && bikesUpdatedAt !== null && ridesUpdatedAt !== null ? Math.min(stationsUpdatedAt, bikesUpdatedAt, ridesUpdatedAt) : null,
+    availabilityRefreshing: Boolean(stationsRefreshing || bikesRefreshing || ridesRefreshing),
+    availabilityError: Boolean(stationsError || bikesError || ridesError),
     refreshData,
     bikes,
     rides,

@@ -16,6 +16,19 @@ export function isUsableStation(station: StationStats, purpose: StationPurpose, 
   return purpose === "return" ? freeDocks(station) > 0 : (lowFrameOnly ? station.stepThroughAvailable : station.available) > 0
 }
 
+export function stationAvailability(station: StationStats, purpose: StationPurpose, lowFrameOnly = false) {
+  const count = purpose === "return" ? freeDocks(station) : lowFrameOnly ? station.stepThroughAvailable : station.available
+  const label = purpose === "return" ? "free docks" : lowFrameOnly ? "low-frame bikes" : "bikes available"
+  const offline = station.capacity <= 0 || station.status === "offline"
+  const usable = !offline && count > 0
+  const reason = offline ? "Offline" : usable ? "Usable" : purpose === "return" ? "Full" : lowFrameOnly ? "No low-frame bikes" : "No bikes"
+  return { count, label, usable, reason, state: offline ? "offline" as const : usable ? "usable" as const : "unavailable" as const }
+}
+
+export function availabilityIsStale(updatedAt: number | null, now: number) {
+  return updatedAt === null || now - updatedAt > 60000
+}
+
 export function distanceMeters(from: Coordinates, to: Coordinates) {
   if (!validCoordinates(from) || !validCoordinates(to)) return Infinity
   const radians = (degrees: number) => degrees * Math.PI / 180

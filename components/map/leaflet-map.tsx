@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, ZoomControl } from "react-leaflet"
+import { useEffect, useMemo, useState } from "react"
+import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet"
+import { useTheme } from "next-themes"
 import L from "leaflet"
-import type { Station } from "@/lib/types"
+import type { StationStats } from "@/lib/store"
 import type { InteractiveMapProps } from "./interactive-map"
-import { getStationHealth, getStationHealthColor, HEALTH_LABELS } from "@/lib/station-health"
+import { stationAvailability, validCoordinates, type StationPurpose } from "@/lib/station-navigation"
 import "leaflet/dist/leaflet.css"
 
 /**
@@ -51,178 +52,89 @@ if (typeof window !== "undefined") {
 
 const CAMPUS_CENTER: [number, number] = [10.7606, 78.8155]
 
-// Classic Leaflet-style teardrop pin, color-coded by fill health, with the
-// live available-cycle count rendered in white at the center.
-function buildIcon(
-  station: Station & { available: number; capacity: number },
-  selected: boolean,
-) {
-  const color = getStationHealthColor(station.available, station.capacity)
-  const scale = selected ? 1.2 : 1
-  const w = Math.round(34 * scale)
-  const h = Math.round(46 * scale)
-  const fontSize = selected ? 15 : 13
-  const shadow = selected
-    ? "drop-shadow(0 4px 6px rgba(0,0,0,.45))"
-    : "drop-shadow(0 2px 3px rgba(0,0,0,.35))"
+function buildIcon(station: StationStats, selected: boolean, purpose: StationPurpose, lowFrameOnly: boolean, uncertain: boolean) {
+  const info = stationAvailability(station, purpose, lowFrameOnly)
+  const symbol = uncertain ? "?" : info.state === "offline" ? "×" : info.count
   return L.divIcon({
-    className: "cyclenet-marker",
-    html: `
-      <div style="filter:${shadow};line-height:0;">
-        <svg width="${w}" height="${h}" viewBox="0 0 34 46" xmlns="http://www.w3.org/2000/svg">
-          <path d="M17 1C8.163 1 1 8.163 1 17c0 11.6 16 28 16 28s16-16.4 16-28C33 8.163 25.837 1 17 1Z"
-            fill="${color}" stroke="#ffffff" stroke-width="2" />
-          <text x="17" y="17.5" text-anchor="middle" dominant-baseline="central"
-            fill="#ffffff" font-family="var(--font-sans), system-ui, sans-serif"
-            font-size="${fontSize}" font-weight="700">${station.available}</text>
-        </svg>
-      </div>`,
-    iconSize: [w, h],
-    iconAnchor: [w / 2, h],
-    popupAnchor: [0, -h + 8],
+    className: `cyclenet-marker ${uncertain ? "uncertain" : info.state}${selected ? " selected" : ""}`,
+    html: `<span class="cyclenet-pin">${symbol}</span>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    tooltipAnchor: [0, -24],
   })
 }
 
-function MapController({
-  stations,
-}: {
-  stations: Station[]
-}) {
+function MapController({ stations, selectedId, resetSignal = 0, locateSignal = 0, origin }: InteractiveMapProps) {
   const map = useMap()
-  // Only refit when the set of stations changes (add/remove), not on position edits.
-  const key = stations.map((s) => s.id).join(",")
+  const key = stations.map((station) => station.id).join(",")
   useEffect(() => {
-    if (stations.length === 0) return
-    const bounds = L.latLngBounds(stations.map((s) => [s.lat, s.lng]))
-    // `animate: false` avoids a zoom transition whose end-callback can fire
-    // after the map pane is torn down (theme toggle / unmount) and crash.
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17, animate: false })
-    // Recalculate size in case the container mounted before layout settled.
-    const t = setTimeout(() => {
-      // Guard: the map may have been removed before this fires.
-      if ((map as unknown as { _mapPane?: HTMLElement })._mapPane) {
-        map.invalidateSize({ animate: false })
-      }
-    }, 200)
-    return () => clearTimeout(t)
+    map.invalidateSize({ animate: false })
+    const points = stations.filter(validCoordinates).map((station) => L.latLng(station.lat, station.lng))
+    if (points.length) map.fitBounds(L.latLngBounds(points), { paddingTopLeft: [40, 48], paddingBottomRight: [40, window.innerWidth < 768 ? 150 : 48], maxZoom: 17, animate: false })
+    // Fit only on station membership changes or an explicit recenter request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, key])
-  return null
-}
+  }, [map, key, resetSignal])
 
-function SelectedStationController({ stations, selectedId }: Pick<InteractiveMapProps, "stations" | "selectedId">) {
-  const map = useMap()
   const station = stations.find((item) => item.id === selectedId)
   const lat = station?.lat
   const lng = station?.lng
   useEffect(() => {
-    if (lat !== undefined && lng !== undefined) {
-      map.invalidateSize({ animate: false })
+    if (lat !== undefined && lng !== undefined && validCoordinates({ lat, lng })) {
       map.setView([lat, lng], Math.max(map.getZoom(), 17), { animate: false })
+      if (window.innerWidth < 768) map.panBy([0, 80], { animate: false })
     }
   }, [map, selectedId, lat, lng])
+
+  useEffect(() => {
+    if (locateSignal && origin && validCoordinates(origin)) map.setView([origin.lat, origin.lng], 17, { animate: false })
+    // Only explicit locate requests should move the camera, not a data refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, locateSignal])
+
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      if ((map as unknown as { _mapPane?: HTMLElement })._mapPane) map.invalidateSize({ animate: false, pan: false })
+    })
+    observer.observe(map.getContainer())
+    return () => observer.disconnect()
+  }, [map])
   return null
 }
 
-export default function LeafletMap({ stations, selectedId, onSelect, editable, onMove }: InteractiveMapProps) {
-  const tileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-  const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+function StationMarkers({ stations, selectedId, onSelect, editable, onMove, purpose = "borrow", lowFrameOnly = false, availabilityUncertain = false }: InteractiveMapProps) {
+  const map = useMap()
+  const [zoom, setZoom] = useState(map.getZoom())
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
+  const markers = useMemo(() => stations.filter(validCoordinates).map((station) => ({ station, icon: buildIcon(station, station.id === selectedId, purpose, lowFrameOnly, availabilityUncertain) })), [stations, selectedId, purpose, lowFrameOnly, availabilityUncertain])
+  return <>{markers.map(({ station, icon }) => {
+    const info = stationAvailability(station, purpose, lowFrameOnly)
+    const markerLabel = `${station.name}: ${availabilityUncertain ? "availability unconfirmed" : `${info.count} ${info.label}, ${info.reason}`}`
+    return <Marker key={`${station.id}:${markerLabel}`} position={[station.lat, station.lng]} icon={icon} title={markerLabel} alt={markerLabel} draggable={editable} eventHandlers={{
+      click: () => onSelect(station.id),
+      dragend: (event) => { const { lat, lng } = event.target.getLatLng(); onMove?.(station.id, lat, lng) },
+    }} zIndexOffset={station.id === selectedId ? 1000 : 0}>
+      <Tooltip key={zoom >= 17 || selectedId === station.id ? "visible" : "hover"} direction="top" permanent={zoom >= 17 || selectedId === station.id} className="cyclenet-tooltip">
+        <span>{station.shortName}{!info.usable && !availabilityUncertain ? ` · ${info.reason}` : ""}</span>
+      </Tooltip>
+    </Marker>
+  })}</>
+}
 
-  const markers = useMemo(
-    () =>
-      stations.map((s) => ({
-        station: s,
-        icon: buildIcon(s, s.id === selectedId),
-      })),
-    [stations, selectedId],
-  )
-
-  return (
-    <MapContainer
-      className="cyclenet-map font-sans"
-      center={CAMPUS_CENTER}
-      zoom={16}
-      scrollWheelZoom
-      zoomControl={false}
-      // Disable zoom animation: its `transitionend` callback (`_onZoomTransitionEnd`)
-      // can fire after the map pane is torn down during a re-render/unmount
-      // (e.g. theme toggle) and crash reading `_leaflet_pos`.
-      zoomAnimation={false}
-      markerZoomAnimation={false}
-      style={{ height: "100%", width: "100%", background: "#e8e6df" }}
-    >
-      <ZoomControl position="topleft" />
-      <TileLayer
-        url={tileUrl}
-        attribution={tileAttribution}
-        maxZoom={19}
-        updateWhenIdle
-        keepBuffer={2}
-        crossOrigin="anonymous"
-      />
-      {markers.map(({ station, icon }) => {
-        const color = getStationHealthColor(station.available, station.capacity)
-        const healthLabel = HEALTH_LABELS[getStationHealth(station.available, station.capacity)]
-        const freeDocks = Math.max(0, station.capacity - station.occupied)
-        const markerLabel = `${station.name}: ${station.available} available, ${station.stepThroughAvailable} low-frame, ${station.stepOverAvailable} high-frame, ${station.unclassifiedAvailable} awaiting frame inspection`
-        return (
-          <Marker
-            key={`${station.id}:${markerLabel}`}
-            position={[station.lat, station.lng]}
-            icon={icon}
-            title={markerLabel}
-            alt={markerLabel}
-            draggable={editable}
-            eventHandlers={{
-              click: () => onSelect(station.id),
-              dragend: (e) => {
-                const { lat, lng } = e.target.getLatLng()
-                onMove?.(station.id, lat, lng)
-              },
-            }}
-            zIndexOffset={station.id === selectedId ? 1000 : 0}
-          >
-            <Tooltip
-              direction="top"
-              offset={[0, station.id === selectedId ? -52 : -44]}
-              permanent
-              className="cyclenet-tooltip"
-            >
-              <span className="font-semibold">{station.shortName}</span>
-            </Tooltip>
-            <Popup>
-              <div className="flex min-w-48 flex-col gap-2 text-sm text-card-foreground">
-                <p className="font-semibold leading-tight">{station.name}</p>
-                <p className="text-muted-foreground">{station.zone}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="font-medium">{healthLabel}</span>
-                </div>
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-                  <dt className="text-muted-foreground">Available</dt>
-                  <dd className="text-right font-semibold tabular-nums">
-                    {station.available}/{station.capacity}
-                  </dd>
-                  <dt className="text-muted-foreground">Low-frame</dt>
-                  <dd className="text-right font-semibold tabular-nums">{station.stepThroughAvailable}</dd>
-                  <dt className="text-muted-foreground">High-frame</dt>
-                  <dd className="text-right font-semibold tabular-nums">{station.stepOverAvailable}</dd>
-                  {station.unclassifiedAvailable > 0 && (
-                    <>
-                      <dt className="text-muted-foreground">Unclassified</dt>
-                      <dd className="text-right font-semibold tabular-nums">{station.unclassifiedAvailable}</dd>
-                    </>
-                  )}
-                  <dt className="text-muted-foreground">Free docks</dt>
-                  <dd className="text-right font-semibold tabular-nums">{freeDocks}</dd>
-                </dl>
-              </div>
-            </Popup>
-          </Marker>
-        )
-      })}
-      <MapController stations={stations} />
-      <SelectedStationController stations={stations} selectedId={selectedId} />
-    </MapContainer>
-  )
+export default function LeafletMap(props: InteractiveMapProps) {
+  const { resolvedTheme } = useTheme()
+  const layer = resolvedTheme === "dark" ? "dark_all" : "light_all"
+  const { gpsLocation, origin, accuracy, onTileError, resetSignal = 0 } = props
+  return <MapContainer className="cyclenet-map font-sans" center={CAMPUS_CENTER} zoom={16} scrollWheelZoom zoomControl={false}
+    // Keep teardown-safe, non-animated camera updates during theme and HMR changes.
+    zoomAnimation={false} markerZoomAnimation={false} style={{ height: "100%", width: "100%", background: "var(--muted)" }}>
+    <ZoomControl position="topleft" />
+    <TileLayer key={`${layer}:${resetSignal}`} url={`https://{s}.basemaps.cartocdn.com/${layer}/{z}/{x}/{y}{r}.png`} attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'} subdomains="abcd" maxZoom={19} updateWhenIdle keepBuffer={2} crossOrigin="anonymous" eventHandlers={{ tileerror: () => onTileError?.() }} />
+    <StationMarkers {...props} />
+    {gpsLocation && validCoordinates(gpsLocation) && <>
+      {accuracy !== null && accuracy !== undefined && Number.isFinite(accuracy) && accuracy > 0 && <Circle center={[gpsLocation.lat, gpsLocation.lng]} radius={Math.min(accuracy, 5000)} interactive={false} pathOptions={{ color: "var(--primary)", fillColor: "var(--primary)", fillOpacity: 0.08, weight: 1 }} />}
+      <CircleMarker center={[gpsLocation.lat, gpsLocation.lng]} radius={7} pathOptions={{ color: "var(--foreground)", fillColor: "var(--primary)", fillOpacity: 1, weight: 2 }}><Tooltip>My location · approximate</Tooltip></CircleMarker>
+    </>}
+    {origin && validCoordinates(origin) && (!gpsLocation || origin.lat !== gpsLocation.lat || origin.lng !== gpsLocation.lng) && <CircleMarker center={[origin.lat, origin.lng]} radius={24} interactive={false} pathOptions={{ color: "var(--primary)", fillOpacity: 0, weight: 2, dashArray: "4 4" }} />}
+    <MapController {...props} />
+  </MapContainer>
 }

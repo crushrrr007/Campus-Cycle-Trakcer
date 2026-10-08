@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
+import { createRequire } from "node:module"
 import vm from "node:vm"
 import ts from "typescript"
 import * as jsxRuntime from "react/jsx-runtime"
@@ -13,6 +14,17 @@ function loadModule(path, requireModule = () => { throw new Error("Unexpected im
   const exports = {}
   vm.runInNewContext(output, { exports, require: requireModule })
   return exports
+}
+
+const require = createRequire(import.meta.url)
+function loadUI(path) {
+  return loadModule(path, (name) => {
+    if (name.startsWith("@/")) {
+      const source = name.slice(2)
+      return loadUI(`../${source}${source.startsWith("components/") ? ".tsx" : ".ts"}`)
+    }
+    return require(name)
+  })
 }
 
 const frames = loadModule("../lib/bike-frames.ts")
@@ -71,6 +83,18 @@ test("frame types accept only explicit inspected classifications", () => {
   for (const value of [null, undefined, "girls", "low-frame", "", {}, 1]) assert.equal(isBikeFrameType(value), false)
   assert.match(bikeFrameLabel("step-through"), /Step-through \/ low-frame/)
   assert.match(bikeFrameLabel("unclassified"), /inspection/)
+})
+
+test("frame badges allow full label height instead of clipping wrapped text", () => {
+  const { BikeFrameBadge } = loadUI("../components/bike-frame-info.tsx")
+  for (const frameType of ["step-through", "step-over", "unclassified"]) {
+    const markup = renderToStaticMarkup(jsxRuntime.jsx(BikeFrameBadge, { frameType }))
+    assert.ok(markup.includes(bikeFrameLabel(frameType)))
+    assert.match(markup, /\bh-auto\b/)
+    assert.match(markup, /\bwhitespace-normal\b/)
+    assert.match(markup, /\bbreak-words\b/)
+    assert.doesNotMatch(markup, /\bh-5\b/)
+  }
 })
 
 test("station counts exclude maintenance, active rides, other stations and unclassified bikes from verified stock", () => {
@@ -159,10 +183,10 @@ function renderMap(station) {
   return renderToStaticMarkup(Map({ stations: [station], selectedId: null, onSelect: () => {} }))
 }
 
-test("permanent map labels and station popups display both available frame counts", () => {
+test("permanent map labels show only station names while popups retain frame counts", () => {
   const markup = renderMap(mapStation)
-  assert.match(markup, /data-permanent="true"/)
-  assert.match(markup, /3 low .*4 high/)
+  assert.match(markup, /data-permanent="true"><span[^>]*>Library<\/span><\/div>/)
+  assert.doesNotMatch(markup, /3 low .*4 high/)
   assert.match(markup, /Low-frame<\/dt><dd[^>]*>3<\/dd>/)
   assert.match(markup, /High-frame<\/dt><dd[^>]*>4<\/dd>/)
   assert.match(markup, /Main Library: 7 available, 3 low-frame, 4 high-frame, 0 awaiting frame inspection/)
@@ -170,9 +194,10 @@ test("permanent map labels and station popups display both available frame count
   assert.doesNotMatch(markup, /Unclassified<\/dt>/)
 })
 
-test("map labels show zero rather than treating unclassified bikes as low or high", () => {
+test("map popups do not treat unclassified bikes as low or high", () => {
   const markup = renderMap({ ...mapStation, available: 2, occupied: 2, stepThroughAvailable: 0, stepOverAvailable: 0, unclassifiedAvailable: 2 })
-  assert.match(markup, /0 low .*0 high/)
+  assert.match(markup, /Low-frame<\/dt><dd[^>]*>0<\/dd>/)
+  assert.match(markup, /High-frame<\/dt><dd[^>]*>0<\/dd>/)
   assert.match(markup, /Unclassified<\/dt><dd[^>]*>2<\/dd>/)
   assert.match(markup, /0 low-frame, 0 high-frame, 2 awaiting frame inspection/)
 })
@@ -180,9 +205,14 @@ test("map labels show zero rather than treating unclassified bikes as low or hig
 test("map frame counts reflect borrowing, returning and maintenance status", () => {
   const fleet = [bike("step-through"), bike("step-over"), bike("step-through", "A", "maintenance")]
   const renderFleet = () => renderMap({ ...mapStation, ...count(fleet, "A") })
-  assert.match(renderFleet(), /1 low .*1 high/)
+  const assertPopupCounts = (low, high) => {
+    const markup = renderFleet()
+    assert.match(markup, new RegExp(`Low-frame<\\/dt><dd[^>]*>${low}<\\/dd>`))
+    assert.match(markup, new RegExp(`High-frame<\\/dt><dd[^>]*>${high}<\\/dd>`))
+  }
+  assertPopupCounts(1, 1)
   fleet[0] = { ...fleet[0], status: "in-use", stationId: null }
-  assert.match(renderFleet(), /0 low .*1 high/)
+  assertPopupCounts(0, 1)
   fleet[0] = { ...fleet[0], status: "available", stationId: "A" }
-  assert.match(renderFleet(), /1 low .*1 high/)
+  assertPopupCounts(1, 1)
 })

@@ -69,11 +69,11 @@ export default function MapPage() {
         <p className="text-sm leading-relaxed text-muted-foreground" role="status">
           {lowFrameOnly
             ? `${visibleStations.length} stations with low-frame bikes available`
-            : "Map labels show available low-frame and high-frame bikes. Pin numbers show the total available."}
+            : "Pin numbers show available bikes. Select a station to see its frame types."}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="relative overflow-hidden p-0">
           <div className="absolute left-3 top-3 z-[1200] flex flex-wrap items-center gap-3 rounded-lg border bg-card/90 px-3 py-2 backdrop-blur">
             {HEALTH_LEGEND.map((l) => (
@@ -106,7 +106,7 @@ export default function MapPage() {
           </div>
         </Card>
 
-        <Card className="overflow-hidden p-0">
+        <Card className="min-w-0 overflow-hidden p-0">
           {selected ? (
             <StationPanel
               station={selected}

@@ -4,7 +4,7 @@ import type { BikeFrameType } from "@/lib/types"
 
 export function BikeFrameBadge({ frameType }: { frameType: BikeFrameType }) {
   return (
-    <Badge variant={frameType === "step-through" ? "secondary" : "outline"} className="max-w-full whitespace-normal text-sm">
+    <Badge variant={frameType === "step-through" ? "secondary" : "outline"} className="h-auto min-h-6 max-w-full justify-start whitespace-normal break-words py-1 text-sm leading-normal">
       {bikeFrameLabel(frameType)}
     </Badge>
   )

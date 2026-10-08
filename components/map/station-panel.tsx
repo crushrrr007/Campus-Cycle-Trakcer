@@ -106,35 +106,36 @@ export function StationPanel({
             {visibleBikes.map((b) => (
               <li
                 key={b.id}
-                className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3"
+                className="flex min-w-0 flex-col items-start gap-2 rounded-lg border bg-card p-3"
               >
-                <div className="flex items-center gap-3">
-                  <span className="flex size-8 items-center justify-center rounded-md bg-muted">
+                <div className="flex w-full min-w-0 items-center gap-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
                     {b.status === "maintenance" ? (
                       <Wrench className="size-4 text-muted-foreground" />
                     ) : (
                       <BikeIcon className="size-4 text-primary" />
                     )}
                   </span>
-                  <div className="flex flex-col">
-                    <span className="font-mono text-sm font-medium">{b.id}</span>
-                    <span className="text-sm text-muted-foreground">{b.model}</span>
-                    <BikeFrameBadge frameType={b.frameType} />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="break-words font-mono text-sm font-medium">{b.id}</span>
+                    <span className="break-words text-sm text-muted-foreground">{b.model}</span>
                   </div>
+                  {role === "student" && b.status === "available" && (
+                    <Button
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleBorrow(b.id)}
+                      disabled={!!myActiveRide}
+                    >
+                      <Navigation data-icon="inline-start" />
+                      Borrow
+                    </Button>
+                  )}
+                  {b.status === "maintenance" && (
+                    <span className="shrink-0 text-xs text-muted-foreground">Servicing</span>
+                  )}
                 </div>
-                {role === "student" && b.status === "available" && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleBorrow(b.id)}
-                    disabled={!!myActiveRide}
-                  >
-                    <Navigation data-icon="inline-start" />
-                    Borrow
-                  </Button>
-                )}
-                {b.status === "maintenance" && (
-                  <span className="text-xs text-muted-foreground">Servicing</span>
-                )}
+                <BikeFrameBadge frameType={b.frameType} />
               </li>
             ))}
           </ul>

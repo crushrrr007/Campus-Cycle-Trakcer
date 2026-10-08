@@ -174,13 +174,7 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
               permanent
               className="cyclenet-tooltip"
             >
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="font-semibold">{station.shortName}</span>
-                <span className="font-medium tabular-nums">
-                  {station.stepThroughAvailable} low <span aria-hidden="true">·</span> {station.stepOverAvailable} high
-                  <span className="sr-only"> frame bikes available</span>
-                </span>
-              </div>
+              <span className="font-semibold">{station.shortName}</span>
             </Tooltip>
             <Popup>
               <div className="flex min-w-48 flex-col gap-2 text-sm text-card-foreground">

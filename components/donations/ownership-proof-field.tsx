@@ -40,7 +40,7 @@ export function OwnershipProofField({ proof, error, reading, onChange, onError, 
         <Field data-invalid={Boolean(error)} data-disabled={reading}>
           <FieldLabel htmlFor="donation-proof-file">Invoice / ownership document (required)</FieldLabel>
           <Input id="donation-proof-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" disabled={reading} onChange={attach} aria-invalid={Boolean(error)} aria-describedby={`donation-proof-help${error ? " donation-proof-error" : ""}`} />
-          <FieldDescription id="donation-proof-help">PDF, JPG or PNG, up to 2 MB. Included in your downloaded draft, not uploaded. Redact payment details and unrelated personal information; keep the owner name and bicycle identifiers visible.</FieldDescription>
+          <FieldDescription id="donation-proof-help">PDF, JPG or PNG, up to 2 MB. Saved privately when you submit; also included in downloaded backups. Redact payment details and unrelated personal information; keep the owner name and bicycle identifiers visible.</FieldDescription>
           {error && <FieldError id="donation-proof-error">{error}</FieldError>}
           {reading && <p role="status" className="text-sm text-muted-foreground">Reading ownership document…</p>}
           {proof && <p role="status" className="break-words text-sm text-muted-foreground">Attached: {proof.filename} · {Math.ceil(proof.sizeBytes / 1024)} KB · not verified</p>}

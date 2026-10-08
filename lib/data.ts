@@ -76,7 +76,7 @@ export function seedData(): SeedData {
       lastServiceDate: isoFromOffset(lastServiceDays * DAY),
       serviceHistory,
       model: pick(r, MODELS),
-      frameType: "unclassified",
+      frameType: i % 2 === 1 ? "step-through" : "step-over",
       condition: randInt(r, 55, 99),
     })
   }

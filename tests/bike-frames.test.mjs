@@ -36,6 +36,34 @@ function database(response = { data: [], error: null }) {
   return { ...exports, calls }
 }
 
+test("demo fleet has a deterministic 50/50 frame mix without changing other seed data", () => {
+  const campus = loadModule("../lib/campus.ts")
+  const requireSeedModule = (name) => {
+    if (name === "./campus") return campus
+    throw new Error(`Unexpected import: ${name}`)
+  }
+  const { seedData } = loadModule("../lib/data.ts", requireSeedModule)
+  const seeded = seedData()
+  assert.equal(seeded.bikes.length, 112)
+  assert.equal(seeded.bikes.filter((bike) => bike.frameType === "step-through").length, 56)
+  assert.equal(seeded.bikes.filter((bike) => bike.frameType === "step-over").length, 56)
+  assert.equal(seeded.bikes.filter((bike) => bike.frameType === "unclassified").length, 0)
+  assert.equal(JSON.stringify(seeded), JSON.stringify(seedData()))
+
+  const originalSeedSource = readFileSync(new URL("../lib/data.ts", import.meta.url), "utf8")
+    .replace('frameType: i % 2 === 1 ? "step-through" : "step-over"', 'frameType: "unclassified"')
+  const output = ts.transpileModule(originalSeedSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const exports = {}
+  vm.runInNewContext(output, { exports, require: requireSeedModule })
+  const withoutFrames = (data) => ({
+    ...data,
+    bikes: data.bikes.map(({ frameType: _frameType, ...bike }) => bike),
+  })
+  assert.equal(JSON.stringify(withoutFrames(seeded)), JSON.stringify(withoutFrames(exports.seedData())))
+})
+
 test("frame types accept only explicit inspected classifications", () => {
   for (const value of ["unclassified", "step-through", "step-over"]) assert.equal(isBikeFrameType(value), true)
   for (const value of [null, undefined, "girls", "low-frame", "", {}, 1]) assert.equal(isBikeFrameType(value), false)

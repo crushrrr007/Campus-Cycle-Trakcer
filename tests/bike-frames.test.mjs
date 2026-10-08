@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs"
 import test from "node:test"
 import vm from "node:vm"
 import ts from "typescript"
+import * as jsxRuntime from "react/jsx-runtime"
+import { renderToStaticMarkup } from "react-dom/server"
 
 function loadModule(path, requireModule = () => { throw new Error("Unexpected import") }) {
   const output = ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText
   const exports = {}
   vm.runInNewContext(output, { exports, require: requireModule })
@@ -53,7 +55,7 @@ test("demo fleet has a deterministic 50/50 frame mix without changing other seed
   const originalSeedSource = readFileSync(new URL("../lib/data.ts", import.meta.url), "utf8")
     .replace('frameType: i % 2 === 1 ? "step-through" : "step-over"', 'frameType: "unclassified"')
   const output = ts.transpileModule(originalSeedSource, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText
   const exports = {}
   vm.runInNewContext(output, { exports, require: requireSeedModule })
@@ -128,4 +130,59 @@ test("frame edits retain admin-only RLS and detect filtered-out writes", async (
   assert.equal((await denied.updateBikeInDb("NITT-0001", { frameType: "step-through" })).ok, false)
   const filtered = database({ data: [], error: null })
   assert.equal((await filtered.updateBikeInDb("NITT-0001", { frameType: "step-through" })).ok, false)
+})
+
+function mapModule() {
+  const health = loadModule("../lib/station-health.ts")
+  const Container = ({ children, className }) => jsxRuntime.jsx("div", { className, children })
+  const Marker = ({ title, children }) => jsxRuntime.jsx("div", { "aria-label": title, children })
+  const Tooltip = ({ permanent, children }) => jsxRuntime.jsx("div", { "data-permanent": permanent, children })
+  const Popup = ({ children }) => jsxRuntime.jsx("div", { "data-map-popup": true, children })
+  return loadModule("../components/map/leaflet-map.tsx", (name) => {
+    if (name === "react/jsx-runtime") return jsxRuntime
+    if (name === "react") return { useMemo: (factory) => factory(), useEffect: () => {} }
+    if (name === "react-leaflet") return { MapContainer: Container, Marker, Tooltip, Popup, TileLayer: () => null, ZoomControl: () => null, useMap: () => ({}) }
+    if (name === "leaflet") return { default: { divIcon: (options) => options } }
+    if (name === "leaflet/dist/leaflet.css") return {}
+    if (name === "@/lib/station-health") return health
+    throw new Error(`Unexpected map import: ${name}`)
+  }).default
+}
+
+const mapStation = {
+  id: "A", name: "Main Library", shortName: "Library", zone: "Academic", lat: 10.76, lng: 78.81,
+  capacity: 12, occupied: 9, available: 7, stepThroughAvailable: 3, stepOverAvailable: 4, unclassifiedAvailable: 0,
+}
+
+function renderMap(station) {
+  const Map = mapModule()
+  return renderToStaticMarkup(Map({ stations: [station], selectedId: null, onSelect: () => {} }))
+}
+
+test("permanent map labels and station popups display both available frame counts", () => {
+  const markup = renderMap(mapStation)
+  assert.match(markup, /data-permanent="true"/)
+  assert.match(markup, /3 low .*4 high/)
+  assert.match(markup, /Low-frame<\/dt><dd[^>]*>3<\/dd>/)
+  assert.match(markup, /High-frame<\/dt><dd[^>]*>4<\/dd>/)
+  assert.match(markup, /Main Library: 7 available, 3 low-frame, 4 high-frame, 0 awaiting frame inspection/)
+  assert.match(markup, /Free docks<\/dt><dd[^>]*>3<\/dd>/)
+  assert.doesNotMatch(markup, /Unclassified<\/dt>/)
+})
+
+test("map labels show zero rather than treating unclassified bikes as low or high", () => {
+  const markup = renderMap({ ...mapStation, available: 2, occupied: 2, stepThroughAvailable: 0, stepOverAvailable: 0, unclassifiedAvailable: 2 })
+  assert.match(markup, /0 low .*0 high/)
+  assert.match(markup, /Unclassified<\/dt><dd[^>]*>2<\/dd>/)
+  assert.match(markup, /0 low-frame, 0 high-frame, 2 awaiting frame inspection/)
+})
+
+test("map frame counts reflect borrowing, returning and maintenance status", () => {
+  const fleet = [bike("step-through"), bike("step-over"), bike("step-through", "A", "maintenance")]
+  const renderFleet = () => renderMap({ ...mapStation, ...count(fleet, "A") })
+  assert.match(renderFleet(), /1 low .*1 high/)
+  fleet[0] = { ...fleet[0], status: "in-use", stationId: null }
+  assert.match(renderFleet(), /0 low .*1 high/)
+  fleet[0] = { ...fleet[0], status: "available", stationId: "A" }
+  assert.match(renderFleet(), /1 low .*1 high/)
 })

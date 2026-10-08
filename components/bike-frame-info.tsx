@@ -14,7 +14,7 @@ export function StationFrameAvailability({
   station,
   admin = false,
 }: {
-  station: { capacity: number; stepThroughAvailable: number; unclassifiedAvailable: number }
+  station: { capacity: number; stepThroughAvailable: number; stepOverAvailable: number; unclassifiedAvailable: number }
   admin?: boolean
 }) {
   const needsRestock = needsStepThroughRestock(station)
@@ -23,6 +23,7 @@ export function StationFrameAvailability({
       <span className={station.stepThroughAvailable > 0 ? "font-medium text-primary" : "text-muted-foreground"}>
         {station.stepThroughAvailable} low-frame available
       </span>
+      <span className="text-muted-foreground">{station.stepOverAvailable} high-frame available</span>
       {admin && needsRestock && (
         <span className="font-medium text-destructive">Restock needed · target: at least 1</span>
       )}

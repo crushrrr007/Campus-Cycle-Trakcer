@@ -199,6 +199,14 @@
   }
 }
 
+/* OpenStreetMap tiles stay light even when the surrounding app is dark. */
+.cyclenet-map {
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.01 250);
+  --muted-foreground: oklch(0.52 0.01 250);
+  --border: oklch(0.9 0.005 250);
+}
+
 /* Always-on station name labels on the live map.
    Clean, minimal style: no box or border, just small text with a white halo
    so it stays legible directly on the light map tiles. */
@@ -208,15 +216,16 @@
   box-shadow: none;
   padding: 0;
   margin-top: -2px;
-  color: #1f2937;
-  font-size: 10px;
+  color: var(--card-foreground);
+  font-size: 14px;
+  line-height: 1.4;
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
   text-shadow:
-    0 0 2px #fff,
-    0 0 3px #fff,
-    0 1px 2px #fff;
+    0 0 2px var(--card),
+    0 0 3px var(--card),
+    0 1px 2px var(--card);
 }
 .leaflet-tooltip.cyclenet-tooltip::before {
   display: none;
@@ -225,19 +234,19 @@
 /* Detail popup shown when a station pin is clicked. Pinned to light colors so
    the map surface always reads as light mode regardless of the app theme. */
 .leaflet-popup.leaflet-popup .leaflet-popup-content-wrapper {
-  background: #ffffff;
-  color: #1f2937;
-  border: 1px solid #e5e7eb;
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 .leaflet-popup.leaflet-popup .leaflet-popup-tip {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--card);
+  border: 1px solid var(--border);
 }
 .leaflet-popup.leaflet-popup .leaflet-popup-content {
   margin: 10px 12px;
 }
 .leaflet-popup.leaflet-popup a.leaflet-popup-close-button {
-  color: #6b7280;
+  color: var(--muted-foreground);
 }

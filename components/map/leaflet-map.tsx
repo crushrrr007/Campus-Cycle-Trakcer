@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react"
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, ZoomControl } from "react-leaflet"
 import L from "leaflet"
 import type { Station } from "@/lib/types"
+import type { InteractiveMapProps } from "./interactive-map"
 import { getStationHealth, getStationHealthColor, HEALTH_LABELS } from "@/lib/station-health"
 import "leaflet/dist/leaflet.css"
 
@@ -46,14 +47,6 @@ function patchLeafletTeardownGuards() {
 
 if (typeof window !== "undefined") {
   patchLeafletTeardownGuards()
-}
-
-interface LeafletMapProps {
-  stations: (Station & { available: number; occupied: number })[]
-  selectedId: string | null
-  onSelect: (id: string) => void
-  editable?: boolean
-  onMove?: (id: string, lat: number, lng: number) => void
 }
 
 const CAMPUS_CENTER: [number, number] = [10.7606, 78.8155]
@@ -117,7 +110,7 @@ function MapController({
   return null
 }
 
-export default function LeafletMap({ stations, selectedId, onSelect, editable, onMove }: LeafletMapProps) {
+export default function LeafletMap({ stations, selectedId, onSelect, editable, onMove }: InteractiveMapProps) {
   const tileUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
   const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 
@@ -132,6 +125,7 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
 
   return (
     <MapContainer
+      className="cyclenet-map font-sans"
       center={CAMPUS_CENTER}
       zoom={16}
       scrollWheelZoom
@@ -155,12 +149,15 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
       {markers.map(({ station, icon }) => {
         const color = getStationHealthColor(station.available, station.capacity)
         const healthLabel = HEALTH_LABELS[getStationHealth(station.available, station.capacity)]
-        const freeDocks = Math.max(0, station.capacity - station.available)
+        const freeDocks = Math.max(0, station.capacity - station.occupied)
+        const markerLabel = `${station.name}: ${station.available} available, ${station.stepThroughAvailable} low-frame, ${station.stepOverAvailable} high-frame, ${station.unclassifiedAvailable} awaiting frame inspection`
         return (
           <Marker
             key={station.id}
             position={[station.lat, station.lng]}
             icon={icon}
+            title={markerLabel}
+            alt={markerLabel}
             draggable={editable}
             eventHandlers={{
               click: () => onSelect(station.id),
@@ -173,28 +170,44 @@ export default function LeafletMap({ stations, selectedId, onSelect, editable, o
           >
             <Tooltip
               direction="top"
-              offset={[0, -44]}
+              offset={[0, station.id === selectedId ? -52 : -44]}
               permanent
               className="cyclenet-tooltip"
             >
-              {station.name}
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="font-semibold">{station.shortName}</span>
+                <span className="font-medium tabular-nums">
+                  {station.stepThroughAvailable} low <span aria-hidden="true">·</span> {station.stepOverAvailable} high
+                  <span className="sr-only"> frame bikes available</span>
+                </span>
+              </div>
             </Tooltip>
             <Popup>
-              <div className="min-w-40 space-y-1.5">
-                <p className="text-sm font-semibold leading-tight text-[#111827]">{station.name}</p>
-                <p className="text-xs text-[#6b7280]">{station.zone}</p>
-                <div className="flex items-center gap-1.5 pt-0.5">
+              <div className="flex min-w-48 flex-col gap-2 text-sm text-card-foreground">
+                <p className="font-semibold leading-tight">{station.name}</p>
+                <p className="text-muted-foreground">{station.zone}</p>
+                <div className="flex items-center gap-1.5">
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="text-xs font-medium text-[#111827]">{healthLabel}</span>
+                  <span className="font-medium">{healthLabel}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 text-xs">
-                  <span className="text-[#6b7280]">Available</span>
-                  <span className="text-right font-semibold text-[#111827]">
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                  <dt className="text-muted-foreground">Available</dt>
+                  <dd className="text-right font-semibold tabular-nums">
                     {station.available}/{station.capacity}
-                  </span>
-                  <span className="text-[#6b7280]">Free docks</span>
-                  <span className="text-right font-semibold text-[#111827]">{freeDocks}</span>
-                </div>
+                  </dd>
+                  <dt className="text-muted-foreground">Low-frame</dt>
+                  <dd className="text-right font-semibold tabular-nums">{station.stepThroughAvailable}</dd>
+                  <dt className="text-muted-foreground">High-frame</dt>
+                  <dd className="text-right font-semibold tabular-nums">{station.stepOverAvailable}</dd>
+                  {station.unclassifiedAvailable > 0 && (
+                    <>
+                      <dt className="text-muted-foreground">Unclassified</dt>
+                      <dd className="text-right font-semibold tabular-nums">{station.unclassifiedAvailable}</dd>
+                    </>
+                  )}
+                  <dt className="text-muted-foreground">Free docks</dt>
+                  <dd className="text-right font-semibold tabular-nums">{freeDocks}</dd>
+                </dl>
               </div>
             </Popup>
           </Marker>

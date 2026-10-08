@@ -68,8 +68,8 @@ export default function MapPage() {
         </Button>
         <p className="text-sm leading-relaxed text-muted-foreground" role="status">
           {lowFrameOnly
-            ? `${visibleStations.length} stations with verified step-through bikes available`
-            : "Step-through / low-frame bikes offer easier mounting for any rider."}
+            ? `${visibleStations.length} stations with low-frame bikes available`
+            : "Map labels show available low-frame and high-frame bikes. Pin numbers show the total available."}
         </p>
       </div>
 
@@ -127,7 +127,7 @@ export default function MapPage() {
               {visibleStations.length === 0 && lowFrameOnly && (
                 <div className="flex flex-col gap-3 px-4 pb-4">
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    No verified low-frame bikes available right now. Unclassified bikes are not counted until inspected by an admin.
+                    No low-frame bikes available right now. Unclassified bikes are not counted until inspected by an admin.
                   </p>
                   <Button variant="outline" onClick={() => setLowFrameOnly(false)}>Show all stations</Button>
                 </div>

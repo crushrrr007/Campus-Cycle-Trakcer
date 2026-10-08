@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { Station } from "@/lib/types"
+import type { StationStats } from "@/lib/store"
 
 const LeafletMap = dynamic(() => import("./leaflet-map"), {
   ssr: false,
@@ -13,8 +13,8 @@ const LeafletMap = dynamic(() => import("./leaflet-map"), {
   ),
 })
 
-interface InteractiveMapProps {
-  stations: (Station & { available: number; occupied: number })[]
+export interface InteractiveMapProps {
+  stations: StationStats[]
   selectedId: string | null
   onSelect: (id: string) => void
   editable?: boolean

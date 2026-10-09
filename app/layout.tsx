@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   description:
     'A real-time smart campus bicycle tracking and management platform for NIT Trichy. Borrow and return bikes via QR, find the nearest station with bikes or free docks, explore campus-time analytics, and submit bicycle donations to the campus transport team.',
   generator: 'v0.app',
+  icons: {
+    icon: { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+  },
 }
 
 export const viewport: Viewport = {

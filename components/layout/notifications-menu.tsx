@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useStore } from "@/lib/store"
 import { formatTimeAgo } from "@/lib/analytics"
+import { toast } from "sonner"
 import type { AppNotification } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -33,7 +34,13 @@ const TONE: Record<AppNotification["type"], string> = {
 }
 
 export function NotificationsMenu() {
-  const { notifications, unreadCount, markAllRead } = useStore()
+  const { notifications, unreadCount, markAllRead, notificationsLoading, notificationsError, markingRead, isDemo, currentUser } = useStore()
+  const canMarkRead = notifications.some((notification) => !notification.read && (isDemo || notification.userId === currentUser.id))
+
+  async function handleMarkRead() {
+    try { await markAllRead() }
+    catch { toast.error("Could not mark notifications as read. Please try again.") }
+  }
 
   return (
     <Popover>
@@ -50,7 +57,7 @@ export function NotificationsMenu() {
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-[360px] p-0">
+      <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)] p-0">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">Notifications</span>
@@ -60,14 +67,16 @@ export function NotificationsMenu() {
               </span>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={markAllRead} className="h-7 text-xs">
+          <Button variant="ghost" size="sm" onClick={handleMarkRead} disabled={!canMarkRead || markingRead || notificationsError}>
             <CheckCheck data-icon />
-            Mark all read
+            {markingRead ? "Saving…" : isDemo ? "Mark all read" : "Mark personal read"}
           </Button>
         </div>
         <Separator />
+        {!isDemo && <p className="px-4 py-2 text-sm leading-relaxed text-muted-foreground">Latest 100 alerts. Shared announcements cannot be marked read under the current database permissions.</p>}
         <ScrollArea className="h-[360px]">
           <div className="flex flex-col">
+            {(notificationsLoading || notificationsError || notifications.length === 0) && <p role="status" className="p-4 text-sm leading-relaxed text-muted-foreground">{notificationsLoading ? "Loading notifications…" : notificationsError ? "Notifications could not be refreshed. Trying again shortly." : "No notifications yet."}</p>}
             {notifications.map((n) => {
               const Icon = ICONS[n.type]
               return (

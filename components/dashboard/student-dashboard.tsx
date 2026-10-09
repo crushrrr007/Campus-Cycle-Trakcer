@@ -25,6 +25,7 @@ import { StationStatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { useStore } from "@/lib/store"
 import { formatDateTime } from "@/lib/analytics"
+import { StationFrameAvailability } from "@/components/bike-frame-info"
 
 function useElapsed(iso: string | undefined) {
   const [now, setNow] = useState(() => Date.now())
@@ -173,6 +174,7 @@ export function StudentDashboard() {
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{s.shortName}</span>
                       <span className="text-xs text-muted-foreground">{s.zone}</span>
+                      <StationFrameAvailability station={s} />
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">

@@ -18,7 +18,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: 'CycleNet — Smart Campus Bicycle Tracking · NIT Trichy',
   description:
-    'A real-time smart campus bicycle tracking and management platform for NIT Trichy. Borrow and return bikes via QR, track availability across stations, and explore live analytics.',
+    'A real-time smart campus bicycle tracking and management platform for NIT Trichy. Borrow and return bikes via QR, find the nearest station with bikes or free docks, explore campus-time analytics, and submit bicycle donations to the campus transport team.',
   generator: 'v0.app',
 }
 
@@ -42,11 +42,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} bg-background`}
     >
       <head>
-        {/* Warm up connections to the map tile CDN so tiles paint instantly */}
-        <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://b.basemaps.cartocdn.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://c.basemaps.cartocdn.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://d.basemaps.cartocdn.com" crossOrigin="anonymous" />
+        {/* Warm up connections to the map tile server so tiles paint promptly. */}
+        <link rel="preconnect" href="https://tile.openstreetmap.org" crossOrigin="anonymous" />
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>

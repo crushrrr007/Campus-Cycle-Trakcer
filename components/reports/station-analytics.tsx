@@ -49,20 +49,16 @@ const peakConfig = { trips: { label: "Borrows", color: "var(--chart-1)" } } sati
 
 export function StationAnalytics({ initialStationId }: { initialStationId?: string }) {
   const { rides, stations } = useStore()
-  const [stationId, setStationId] = useState(
-    initialStationId && stations.some((s) => s.id === initialStationId)
-      ? initialStationId
-      : (stations[0]?.id ?? ""),
-  )
+  const [selectedStationId, setStationId] = useState(initialStationId ?? "")
+  const stationId = stations.some((station) => station.id === selectedStationId)
+    ? selectedStationId
+    : (stations[0]?.id ?? "")
 
   const station = stations.find((s) => s.id === stationId)
   const summary = useMemo(() => stationSummary(rides, stationId), [rides, stationId])
   const daily = useMemo(() => stationDailyUsage(rides, stationId), [rides, stationId])
   const peaks = useMemo(() => stationPeakHours(rides, stationId), [rides, stationId])
-  const destinations = useMemo(
-    () => stationTopDestinations(rides, stationId, stations),
-    [rides, stationId, stations],
-  )
+  const destinations = stationTopDestinations(rides, stationId, stations)
 
   if (!station) return null
 

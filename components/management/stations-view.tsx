@@ -37,6 +37,9 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { StationFormDialog } from "@/components/management/station-form-dialog"
 import { StationBikesSheet } from "@/components/management/station-bikes-sheet"
 import { toast } from "sonner"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { StationFrameAvailability } from "@/components/bike-frame-info"
+import { needsStepThroughRestock } from "@/lib/bike-frames"
 
 export function StationsView() {
   const router = useRouter()
@@ -71,6 +74,8 @@ export function StationsView() {
     )
   }, [stations, query])
 
+  const activeStations = stations.filter((station) => station.capacity > 0)
+  const needsRestock = activeStations.filter(needsStepThroughRestock)
   const totalDocks = stations.reduce((a, s) => a + s.capacity, 0)
   const totalAvailable = rows.reduce((a, r) => a + r.available, 0)
 
@@ -88,6 +93,19 @@ export function StationsView() {
           icon={ParkingMeterIcon}
         />
       </div>
+
+      <Alert>
+        <BikeIcon aria-hidden="true" />
+        <AlertTitle>Low-frame coverage: {activeStations.length - needsRestock.length}/{activeStations.length} stations</AlertTitle>
+        <AlertDescription className="flex flex-col gap-2">
+          <p>Target: at least one available step-through / low-frame bike at every operating station. Inspect unclassified bikes, then use View bicycles to relocate verified bikes.</p>
+          {needsRestock.length > 0 ? (
+            <p>Needs restocking: {needsRestock.map((station) => station.shortName).join(", ")}.</p>
+          ) : (
+            <p>{activeStations.length > 0 ? "All operating stations currently meet the target." : "Add an operating station to begin tracking coverage."}</p>
+          )}
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader className="gap-4">
@@ -167,6 +185,7 @@ export function StationsView() {
                       </DropdownMenu>
                     </div>
                   </div>
+                  <StationFrameAvailability station={station} admin />
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>Dock utilization</span>

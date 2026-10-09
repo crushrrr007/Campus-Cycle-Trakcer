@@ -4,6 +4,7 @@ import Link from "next/link"
 import {
   BikeIcon,
   ClockIcon,
+  KeyRoundIcon,
   LogOutIcon,
   MailIcon,
   MapPinIcon,
@@ -16,7 +17,7 @@ import { useStore } from "@/lib/store"
 import { formatDateTime } from "@/lib/analytics"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { StatCard } from "@/components/stat-card"
@@ -78,10 +79,16 @@ export function ProfileView() {
               </span>
             </div>
           </div>
-          <Button variant="outline" nativeButton={false} render={<Link href="/sign-in" />}>
-            <LogOutIcon data-icon="inline-start" />
-            Sign out
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/change-password" className={buttonVariants({ variant: "outline" })}>
+              <KeyRoundIcon data-icon="inline-start" />
+              Change password
+            </Link>
+            <Button variant="outline" nativeButton={false} render={<Link href="/sign-in" />}>
+              <LogOutIcon data-icon="inline-start" />
+              Sign out
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

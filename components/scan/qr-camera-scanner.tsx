@@ -22,7 +22,7 @@ export function QrCameraScanner({ onDetected }: { onDetected: (code: string) => 
     if (videoRef.current) videoRef.current.srcObject = null
   }, [])
 
-  const scanLoop = useCallback(() => {
+  const scanLoop = useCallback(function scanFrame() {
     const video = videoRef.current
     if (!video || detectedRef.current) return
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -48,7 +48,7 @@ export function QrCameraScanner({ onDetected }: { onDetected: (code: string) => 
         }
       }
     }
-    rafRef.current = requestAnimationFrame(scanLoop)
+    rafRef.current = requestAnimationFrame(scanFrame)
   }, [onDetected, stopCamera])
 
   const startCamera = useCallback(async () => {
@@ -88,7 +88,6 @@ export function QrCameraScanner({ onDetected }: { onDetected: (code: string) => 
     <div className="flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-dashed bg-muted/40">
       {active ? (
         <div className="relative w-full">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video
             ref={videoRef}
             playsInline

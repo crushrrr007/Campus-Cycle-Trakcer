@@ -1,10 +1,10 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { isSupabaseConfigured, SUPABASE_URL, SUPABASE_KEY } from "./config"
+import { isSupabaseConfigured, SUPABASE_URL, SUPABASE_KEY, SUPABASE_COOKIE_OPTIONS } from "./config"
 
 /**
  * Server-side Supabase client. Returns null when env vars are missing
- * (demo mode) so callers can gracefully fall back.
+ * so callers can show a configuration-required state.
  *
  * Don't store this client in a global — always create a new one per request.
  */
@@ -14,6 +14,7 @@ export async function createClient() {
   const cookieStore = await cookies()
 
   return createServerClient(SUPABASE_URL, SUPABASE_KEY, {
+      cookieOptions: SUPABASE_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return cookieStore.getAll()

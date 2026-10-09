@@ -2,10 +2,9 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LogOut, UserRound, Wrench } from "lucide-react"
+import { KeyRound, LogOut, UserRound, Wrench } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
-import { clearDemoSessionCookie } from "@/lib/demo-auth"
+import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -18,10 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { GlobalSearch } from "@/components/global-search"
-import { NotificationsMenu } from "@/components/notifications-menu"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { RoleSwitch } from "@/components/role-switch"
+import { GlobalSearch } from "./global-search"
+import { NotificationsMenu } from "./notifications-menu"
+import { ThemeToggle } from "./theme-toggle"
+import { RoleSwitch } from "./role-switch"
 import { useStore } from "@/lib/store"
 
 export function Topbar() {
@@ -29,14 +28,17 @@ export function Topbar() {
   const router = useRouter()
 
   async function handleSignOut() {
-    if (isSupabaseConfigured) {
-      const supabase = createClient()
-      await supabase.auth.signOut()
-    } else {
-      clearDemoSessionCookie()
+    try {
+      const { error } = await createClient().auth.signOut()
+      if (error) {
+        toast.error("Unable to sign out. Please try again.")
+        return
+      }
+      router.replace("/sign-in")
+      router.refresh()
+    } catch {
+      toast.error("Unable to sign out. Check your connection and try again.")
     }
-    router.push("/sign-in")
-    router.refresh()
   }
 
   const initials = currentUser.name
@@ -91,6 +93,16 @@ export function Topbar() {
                   </Link>
                 }
               />
+              {!isDemo && (
+                <DropdownMenuItem
+                  render={
+                    <Link href="/change-password">
+                      <KeyRound />
+                      Change password
+                    </Link>
+                  }
+                />
+              )}
               <DropdownMenuItem
                 render={
                   <Link href="/report">

@@ -11,7 +11,9 @@ import {
   HeartPulseIcon,
 } from "lucide-react"
 import { useStore } from "@/lib/store"
-import type { Bike, BikeStatus } from "@/lib/types"
+import type { Bike, BikeFrameType, BikeStatus } from "@/lib/types"
+import { BIKE_FRAME_OPTIONS, isBikeFrameType } from "@/lib/bike-frames"
+import { BikeFrameBadge } from "@/components/bike-frame-info"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -67,6 +69,7 @@ export function BikesView() {
   const { bikes, stationName, toggleMaintenance, deleteBike } = useStore()
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<BikeStatus | "all">("all")
+  const [frameType, setFrameType] = useState<BikeFrameType | "all">("all")
   const [formOpen, setFormOpen] = useState(false)
   const [editingBike, setEditingBike] = useState<Bike | null>(null)
   const [detailBikeId, setDetailBikeId] = useState<string | null>(null)
@@ -97,6 +100,7 @@ export function BikesView() {
   const filtered = useMemo(() => {
     return bikes.filter((b) => {
       if (status !== "all" && b.status !== status) return false
+      if (frameType !== "all" && b.frameType !== frameType) return false
       if (query) {
         const q = query.toLowerCase()
         return (
@@ -107,7 +111,7 @@ export function BikesView() {
       }
       return true
     })
-  }, [bikes, status, query, stationName])
+  }, [bikes, status, frameType, query, stationName])
 
   return (
     <div className="flex flex-col gap-4">
@@ -161,6 +165,21 @@ export function BikesView() {
                 ))}
               </SelectContent>
             </Select>
+            <Select
+              items={[{ value: "all", label: "All frame types" }, ...BIKE_FRAME_OPTIONS]}
+              value={frameType}
+              onValueChange={(value) => { if (value === "all" || isBikeFrameType(value)) setFrameType(value) }}
+            >
+              <SelectTrigger aria-label="Filter bicycles by frame type" className="w-full sm:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All frame types</SelectItem>
+                {BIKE_FRAME_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="ml-auto text-sm text-muted-foreground">
               {filtered.length} of {bikes.length}
             </span>
@@ -174,7 +193,7 @@ export function BikesView() {
                   <BikeIcon />
                 </EmptyMedia>
                 <EmptyTitle>No bikes match your filters</EmptyTitle>
-                <EmptyDescription>Try clearing the search or selecting a different status.</EmptyDescription>
+                <EmptyDescription>Try clearing the search or selecting a different status or frame type.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -183,6 +202,7 @@ export function BikesView() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Bike</TableHead>
+                    <TableHead>Frame type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Condition</TableHead>
@@ -199,9 +219,14 @@ export function BikesView() {
                       onOpenDetail={() => setDetailBikeId(bike.id)}
                       onEdit={() => openEdit(bike)}
                       onDelete={() => setDeleteTarget(bike)}
-                      onToggleMaintenance={() => {
-                        toggleMaintenance(bike.id)
-                        toast.success(`${bike.id} maintenance status updated.`)
+                      onToggleMaintenance={async () => {
+                        try {
+                          const result = await toggleMaintenance(bike.id)
+                          if (result.ok) toast.success(result.message)
+                          else toast.error(result.message)
+                        } catch {
+                          toast.error("Unable to update maintenance. Please try again.")
+                        }
                       }}
                     />
                   ))}
@@ -288,6 +313,9 @@ function BikeRow({
             <span className="text-xs text-muted-foreground">{bike.model}</span>
           </div>
         </div>
+      </TableCell>
+      <TableCell>
+        <BikeFrameBadge frameType={bike.frameType} />
       </TableCell>
       <TableCell>
         <BikeStatusBadge status={bike.status} />

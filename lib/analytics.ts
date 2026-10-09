@@ -2,22 +2,37 @@ import type { StationStats } from "./store"
 import type { Bike, Ride } from "./types"
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const REF = new Date(Date.UTC(2026, 5, 14, 9, 30, 0))
+export const CAMPUS_TIMEZONE = "Asia/Kolkata"
+const campusDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: CAMPUS_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" })
+const campusHourFormatter = new Intl.DateTimeFormat("en-GB", { timeZone: CAMPUS_TIMEZONE, hour: "2-digit", hourCycle: "h23" })
 
-export function dailyUsage(rides: Ride[], days = 14) {
-  const buckets: { date: string; label: string; trips: number; duration: number }[] = []
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(REF.getTime() - i * 86400000)
-    buckets.push({
-      date: d.toISOString().slice(0, 10),
-      label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`,
-      trips: 0,
-      duration: 0,
-    })
-  }
+export function campusDateKey(value: string | Date) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return ""
+  const parts = campusDateFormatter.formatToParts(date)
+  const part = (type: string) => parts.find((item) => item.type === type)?.value
+  return `${part("year")}-${part("month")}-${part("day")}`
+}
+
+function campusHour(value: string) {
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) ? Number(campusHourFormatter.format(date)) : null
+}
+
+function dateBuckets(days: number, now: Date) {
+  const today = new Date(`${campusDateKey(now)}T00:00:00Z`)
+  const count = Number.isFinite(days) ? Math.max(0, Math.trunc(days)) : 0
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today.getTime() - (count - index - 1) * 86400000)
+    return { date: date.toISOString().slice(0, 10), label: `${date.getUTCDate()}/${date.getUTCMonth() + 1}` }
+  })
+}
+
+export function dailyUsage(rides: Ride[], days = 14, now = new Date()) {
+  const buckets = dateBuckets(days, now).map((bucket) => ({ ...bucket, trips: 0, duration: 0 }))
   const map = new Map(buckets.map((b) => [b.date, b]))
   for (const ride of rides) {
-    const key = ride.borrowTime.slice(0, 10)
+    const key = campusDateKey(ride.borrowTime)
     const b = map.get(key)
     if (b) {
       b.trips += 1
@@ -30,8 +45,8 @@ export function dailyUsage(rides: Ride[], days = 14) {
 export function weeklyUsage(rides: Ride[]) {
   const data = DAY_LABELS.map((label) => ({ label, trips: 0 }))
   for (const ride of rides) {
-    const d = new Date(ride.borrowTime)
-    data[d.getUTCDay()].trips += 1
+    const key = campusDateKey(ride.borrowTime)
+    if (key) data[new Date(`${key}T00:00:00Z`).getUTCDay()].trips += 1
   }
   return data
 }
@@ -39,8 +54,8 @@ export function weeklyUsage(rides: Ride[]) {
 export function peakHours(rides: Ride[]) {
   const data = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${h}:00`, trips: 0 }))
   for (const ride of rides) {
-    const h = new Date(ride.borrowTime).getUTCHours()
-    data[h].trips += 1
+    const hour = campusHour(ride.borrowTime)
+    if (hour !== null) data[hour].trips += 1
   }
   return data.filter((d) => d.hour >= 6 && d.hour <= 22)
 }
@@ -96,7 +111,10 @@ export function stationSummary(rides: Ride[], stationId: string) {
       : Math.round(completed.reduce((sum, r) => sum + (r.durationMin ?? 0), 0) / completed.length)
 
   const hourCounts = new Array(24).fill(0)
-  for (const r of borrows) hourCounts[new Date(r.borrowTime).getUTCHours()] += 1
+  for (const ride of borrows) {
+    const hour = campusHour(ride.borrowTime)
+    if (hour !== null) hourCounts[hour] += 1
+  }
   const busiestHour = hourCounts.indexOf(Math.max(...hourCounts))
 
   return {
@@ -110,26 +128,17 @@ export function stationSummary(rides: Ride[], stationId: string) {
   }
 }
 
-export function stationDailyUsage(rides: Ride[], stationId: string, days = 14) {
+export function stationDailyUsage(rides: Ride[], stationId: string, days = 14, now = new Date()) {
   const scoped = ridesForStation(rides, stationId)
-  const buckets: { date: string; label: string; borrows: number; returns: number }[] = []
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(REF.getTime() - i * 86400000)
-    buckets.push({
-      date: d.toISOString().slice(0, 10),
-      label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`,
-      borrows: 0,
-      returns: 0,
-    })
-  }
+  const buckets = dateBuckets(days, now).map((bucket) => ({ ...bucket, borrows: 0, returns: 0 }))
   const map = new Map(buckets.map((b) => [b.date, b]))
   for (const ride of scoped) {
     if (ride.sourceStationId === stationId) {
-      const b = map.get(ride.borrowTime.slice(0, 10))
+      const b = map.get(campusDateKey(ride.borrowTime))
       if (b) b.borrows += 1
     }
     if (ride.destStationId === stationId && ride.returnTime) {
-      const b = map.get(ride.returnTime.slice(0, 10))
+      const b = map.get(campusDateKey(ride.returnTime))
       if (b) b.returns += 1
     }
   }
@@ -140,7 +149,8 @@ export function stationPeakHours(rides: Ride[], stationId: string) {
   const data = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${h}:00`, trips: 0 }))
   for (const ride of rides) {
     if (ride.sourceStationId !== stationId) continue
-    data[new Date(ride.borrowTime).getUTCHours()].trips += 1
+    const hour = campusHour(ride.borrowTime)
+    if (hour !== null) data[hour].trips += 1
   }
   return data.filter((d) => d.hour >= 6 && d.hour <= 22)
 }
@@ -201,14 +211,16 @@ export function averageDuration(rides: Ride[]) {
   return Math.round(completed.reduce((sum, r) => sum + (r.durationMin ?? 0), 0) / completed.length)
 }
 
-export function tripsToday(rides: Ride[]) {
-  const today = REF.toISOString().slice(0, 10)
-  return rides.filter((r) => r.borrowTime.slice(0, 10) === today).length
+export function tripsToday(rides: Ride[], now = new Date()) {
+  const today = campusDateKey(now)
+  return rides.filter((ride) => campusDateKey(ride.borrowTime) === today).length
 }
 
-export function formatTimeAgo(iso: string) {
-  const diff = REF.getTime() - new Date(iso).getTime()
-  const min = Math.round(diff / 60000)
+export function formatTimeAgo(iso: string, now = new Date()) {
+  const timestamp = new Date(iso).getTime()
+  if (!Number.isFinite(timestamp)) return "—"
+  const diff = Math.max(0, now.getTime() - timestamp)
+  const min = Math.floor(diff / 60000)
   if (min < 1) return "just now"
   if (min < 60) return `${min}m ago`
   const hr = Math.round(min / 60)
@@ -235,6 +247,6 @@ export function formatDateTime(iso: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
-    timeZone: "UTC",
+    timeZone: CAMPUS_TIMEZONE,
   })
 }

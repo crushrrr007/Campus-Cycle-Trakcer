@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,7 +22,9 @@ import {
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { useStore } from "@/lib/store"
-import type { Bike } from "@/lib/types"
+import type { Bike, BikeFrameType } from "@/lib/types"
+import { BIKE_FRAME_OPTIONS, isBikeFrameType } from "@/lib/bike-frames"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 
 const DEFAULT_MODELS = ["NITT Cruiser", "NITT Sprinter", "NITT Commuter"]
 const CUSTOM_MODEL = "__custom__"
@@ -34,7 +36,11 @@ interface BikeFormDialogProps {
   bike?: Bike | null
 }
 
-export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps) {
+export function BikeFormDialog(props: BikeFormDialogProps) {
+  return props.open ? <BikeForm key={props.bike?.id ?? "new"} {...props} /> : null
+}
+
+function BikeForm({ open, onOpenChange, bike }: BikeFormDialogProps) {
   const { bikes, stations, addBike, updateBike } = useStore()
   const isEdit = Boolean(bike)
 
@@ -43,10 +49,12 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
     return Array.from(set).sort()
   }, [bikes])
 
-  const [model, setModel] = useState(DEFAULT_MODELS[0])
+  const [model, setModel] = useState(bike?.model ?? DEFAULT_MODELS[0])
   const [customModel, setCustomModel] = useState("")
-  const [stationId, setStationId] = useState<string>("")
-  const [condition, setCondition] = useState(100)
+  const [frameType, setFrameType] = useState<BikeFrameType>(bike?.frameType ?? "unclassified")
+  const [stationId, setStationId] = useState(bike?.stationId ?? stations[0]?.id ?? "")
+  const [condition, setCondition] = useState(bike?.condition ?? 100)
+  const [saving, setSaving] = useState(false)
 
   // Preview of the next auto-generated bike id
   const nextId = useMemo(() => {
@@ -58,16 +66,7 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
     return `NITT-${String(maxNum + 1).padStart(4, "0")}`
   }, [bikes, bike, isEdit])
 
-  useEffect(() => {
-    if (!open) return
-    const known = bike && models.includes(bike.model)
-    setModel(bike ? (known ? bike.model : CUSTOM_MODEL) : DEFAULT_MODELS[0])
-    setCustomModel(bike && !known ? bike.model : "")
-    setStationId(bike?.stationId ?? stations[0]?.id ?? "")
-    setCondition(bike?.condition ?? 100)
-  }, [open, bike, models, stations])
-
-  async function handleSubmit() {
+  async function saveBike() {
     const finalModel = model === CUSTOM_MODEL ? customModel.trim() : model
     if (!finalModel) {
       toast.error("Please enter a model name.")
@@ -79,7 +78,7 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
     }
 
     if (isEdit && bike) {
-      const patch: Parameters<typeof updateBike>[1] = { model: finalModel, condition }
+      const patch: Parameters<typeof updateBike>[1] = { model: finalModel, condition, frameType }
       // Only re-dock if the bike is not currently on a ride
       if (bike.status !== "in-use" && stationId !== bike.stationId) {
         patch.stationId = stationId
@@ -91,7 +90,7 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
       }
       toast.success(`${bike.id} updated.`)
     } else {
-      const id = await addBike({ model: finalModel, stationId })
+      const id = await addBike({ model: finalModel, stationId, frameType })
       if (!id) {
         toast.error("Could not register the bicycle. Only admins can add bicycles.")
         return
@@ -101,8 +100,20 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
     onOpenChange(false)
   }
 
+  async function handleSubmit() {
+    if (saving) return
+    setSaving(true)
+    try {
+      await saveBike()
+    } catch {
+      toast.error("Unable to save the bicycle. Please try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(value) => { if (!saving) onOpenChange(value) }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${bike?.id}` : "Register bicycle"}</DialogTitle>
@@ -150,6 +161,28 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
             )}
           </div>
 
+          <Field>
+            <FieldLabel htmlFor="bike-frame-type">Frame type</FieldLabel>
+            <Select
+              items={BIKE_FRAME_OPTIONS}
+              value={frameType}
+              onValueChange={(value) => { if (isBikeFrameType(value)) setFrameType(value) }}
+              disabled={saving}
+            >
+              <SelectTrigger id="bike-frame-type" aria-describedby="bike-frame-help" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BIKE_FRAME_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription id="bike-frame-help">
+              Classify after a physical inspection. Low-frame bikes are easier to mount and available to everyone; check saddle height and fit before riding.
+            </FieldDescription>
+          </Field>
+
           <div className="grid gap-2">
             <Label htmlFor="bike-station">Home station</Label>
             <Select
@@ -194,10 +227,10 @@ export function BikeFormDialog({ open, onOpenChange, bike }: BikeFormDialogProps
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>{isEdit ? "Save changes" : "Register"}</Button>
+          <Button disabled={saving} onClick={handleSubmit}>{saving ? "Saving…" : isEdit ? "Save changes" : "Register"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

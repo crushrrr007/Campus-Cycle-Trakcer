@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -38,33 +38,26 @@ interface StationFormDialogProps {
   station?: StationStats | null
 }
 
-export function StationFormDialog({ open, onOpenChange, station }: StationFormDialogProps) {
+export function StationFormDialog(props: StationFormDialogProps) {
+  return props.open ? <StationForm key={props.station?.id ?? "new"} {...props} /> : null
+}
+
+function StationForm({ open, onOpenChange, station }: StationFormDialogProps) {
   const { stations, addStation, updateStation } = useStore()
   const isEdit = Boolean(station)
 
-  const [name, setName] = useState("")
-  const [shortName, setShortName] = useState("")
-  const [zone, setZone] = useState("Academic")
-  const [capacity, setCapacity] = useState(20)
-  const [lat, setLat] = useState<number | null>(null)
-  const [lng, setLng] = useState<number | null>(null)
+  const [name, setName] = useState(station?.name ?? "")
+  const [shortName, setShortName] = useState(station?.shortName ?? "")
+  const [zone, setZone] = useState(station?.zone ?? "Academic")
+  const [capacity, setCapacity] = useState(station?.capacity ?? 20)
+  const [lat, setLat] = useState<number | null>(station?.lat ?? null)
+  const [lng, setLng] = useState<number | null>(station?.lng ?? null)
   const [saving, setSaving] = useState(false)
 
   const zones = useMemo(() => {
     const existing = new Set([...DEFAULT_ZONES, ...stations.map((s) => s.zone)])
     return Array.from(existing).sort()
   }, [stations])
-
-  // Sync form state each time the dialog opens
-  useEffect(() => {
-    if (!open) return
-    setName(station?.name ?? "")
-    setShortName(station?.shortName ?? "")
-    setZone(station?.zone ?? "Academic")
-    setCapacity(station?.capacity ?? 20)
-    setLat(station?.lat ?? null)
-    setLng(station?.lng ?? null)
-  }, [open, station])
 
   async function handleSubmit() {
     const trimmedName = name.trim()
@@ -73,7 +66,7 @@ export function StationFormDialog({ open, onOpenChange, station }: StationFormDi
       toast.error("Please give the station a name.")
       return
     }
-    if (capacity < 1) {
+    if (!Number.isInteger(capacity) || capacity < 1) {
       toast.error("Capacity must be at least 1 dock.")
       return
     }
@@ -82,26 +75,23 @@ export function StationFormDialog({ open, onOpenChange, station }: StationFormDi
       return
     }
 
+    if (saving) return
     setSaving(true)
-    const res =
-      isEdit && station
-        ? await updateStation(station.id, {
-            name: trimmedName,
-            shortName: trimmedShort,
-            zone,
-            capacity,
-            lat,
-            lng,
-          })
+    try {
+      const res = isEdit && station
+        ? await updateStation(station.id, { name: trimmedName, shortName: trimmedShort, zone, capacity, lat, lng })
         : await addStation({ name: trimmedName, shortName: trimmedShort, zone, capacity, lat, lng })
-    setSaving(false)
-
-    if (!res.ok) {
-      toast.error(res.message)
-      return
+      if (!res.ok) {
+        toast.error(res.message)
+        return
+      }
+      toast.success(res.message)
+      onOpenChange(false)
+    } catch {
+      toast.error("Unable to save the station. Please try again.")
+    } finally {
+      setSaving(false)
     }
-    toast.success(isEdit ? `${trimmedName} updated.` : `${trimmedName} is now live with ${capacity} docks.`)
-    onOpenChange(false)
   }
 
   return (

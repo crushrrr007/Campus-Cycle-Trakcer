@@ -1,26 +1,16 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { isSupabaseConfigured, SUPABASE_URL, SUPABASE_KEY } from "./config"
-import { DEMO_SESSION_COOKIE, parseDemoSession } from "@/lib/demo-auth"
+import { isNittEmail, isSupabaseConfigured, SUPABASE_URL, SUPABASE_KEY, SUPABASE_COOKIE_OPTIONS } from "./config"
 
-const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/auth"]
+const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/forgot-password", "/auth"]
 
 export async function updateSession(request: NextRequest) {
-  // DEMO MODE — no Supabase configured. Enforce the same auth flow using
-  // the dummy session cookie so login/signup can be tested in the preview.
   if (!isSupabaseConfigured) {
-    const demoUser = parseDemoSession(request.cookies.get(DEMO_SESSION_COOKIE)?.value)
     const path = request.nextUrl.pathname
     const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
-
-    if (!demoUser && !isPublic) {
+    if (!isPublic) {
       const url = request.nextUrl.clone()
       url.pathname = "/sign-in"
-      return NextResponse.redirect(url)
-    }
-    if (demoUser && (path === "/sign-in" || path === "/sign-up")) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/dashboard"
       return NextResponse.redirect(url)
     }
     return NextResponse.next({ request })
@@ -29,6 +19,7 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
+      cookieOptions: SUPABASE_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -52,17 +43,18 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
 
-  if (!user && !isPublic) {
+  const validUser = Boolean(user?.email_confirmed_at && isNittEmail(user.email ?? ""))
+  function redirectWithCookies(pathname: string) {
     const url = request.nextUrl.clone()
-    url.pathname = "/sign-in"
-    return NextResponse.redirect(url)
+    url.pathname = pathname
+    url.search = ""
+    const response = NextResponse.redirect(url)
+    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie)
+    return response
   }
 
-  if (user && (path === "/sign-in" || path === "/sign-up")) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/dashboard"
-    return NextResponse.redirect(url)
-  }
+  if (!validUser && !isPublic) return redirectWithCookies("/sign-in")
+  if (validUser && (path === "/sign-in" || path === "/sign-up")) return redirectWithCookies("/dashboard")
 
   // You MUST return the supabaseResponse as-is so auth cookies stay in sync.
   return supabaseResponse

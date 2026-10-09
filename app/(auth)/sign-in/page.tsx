@@ -7,8 +7,8 @@ export const metadata = {
   description: "Sign in to your CycleNet account",
 }
 
-export default async function SignInPage() {
-  const user = await getSessionUser()
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const [user, params] = await Promise.all([getSessionUser(), searchParams])
   if (user) redirect("/dashboard")
-  return <AuthForm mode="sign-in" />
+  return <AuthForm mode="sign-in" callbackFailed={params.error === "auth-callback-failed"} />
 }

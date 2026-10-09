@@ -1,7 +1,5 @@
-import { cookies } from "next/headers"
 import { createClient } from "./server"
-import { isSupabaseConfigured } from "./config"
-import { DEMO_SESSION_COOKIE, parseDemoSession } from "@/lib/demo-auth"
+import { isNittEmail, isSupabaseConfigured } from "./config"
 import type { UserRole } from "@/lib/types"
 
 export interface SessionUser {
@@ -15,14 +13,10 @@ export interface SessionUser {
 /**
  * Reads the current Supabase session and the user's profile (role lives in
  * public.profiles, never in client-editable metadata).
- * Returns null when signed out OR when Supabase isn't configured (demo mode).
+ * Returns null when signed out or when Supabase isn't configured.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  // DEMO MODE — no Supabase env vars: read the dummy session cookie instead.
-  if (!isSupabaseConfigured) {
-    const cookieStore = await cookies()
-    return parseDemoSession(cookieStore.get(DEMO_SESSION_COOKIE)?.value)
-  }
+  if (!isSupabaseConfigured) return null
 
   const supabase = await createClient()
   if (!supabase) return null
@@ -30,7 +24,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user?.email_confirmed_at || !isNittEmail(user.email ?? "")) return null
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -41,8 +35,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return {
     id: user.id,
     email: user.email ?? "",
-    name: profile?.full_name || (user.user_metadata?.full_name as string) || "NITT User",
-    role: (profile?.role as UserRole) ?? "student",
+    name: profile?.full_name || (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "") || "NITT User",
+    role: profile?.role === "admin" ? "admin" : "student",
     department: profile?.department ?? "",
   }
 }
